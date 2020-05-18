@@ -13,7 +13,7 @@ genbank_summary = file(
 process download {
 
     output:
-    path("food_taxids.txt"), path("genbank_taxids.txt"), path("refseq_taxids.txt"),
+    tuple path("food_taxids.txt"), path("genbank_taxids.txt"), path("refseq_taxids.txt"),
         path("foodb"), path("genbank_summary.tsv"), path("refseq_catalog.tsv.gz") into tax_dbs, dbs
 
     """
