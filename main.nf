@@ -13,12 +13,13 @@ genbank_summary = file(
 process download {
 
     output:
-    path("foodb")
+    path("food_taxids.txt"), path("genbank_taxids.txt"), path("refseq_taxids.txt"),
+        path("foodb"), path("genbank_summary.tsv"), path("refseq_catalog.tsv.gz") into tax_dbs, dbs
 
     """
-    wget $foodb -o foodb.tgz \
-    wget $refseq_catalog -o refseq_catalog.tsv.gz \
-    wget $genbank_summary -o genbank_summary.tsv \
+    wget $foodb -O foodb.tgz \
+    wget $refseq_catalog -O refseq_catalog.tsv.gz \
+    wget $genbank_summary -O genbank_summary.tsv \
     tar -xf foodb.tgz \
     zcat refseq_catalog.tsv.gz | cut -f 1 > refseq_taxids.txt \
     cut -f 6 genbank_summary.tsv | tail -n +3 > genbank_taxids.txt \
