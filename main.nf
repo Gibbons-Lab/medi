@@ -17,12 +17,12 @@ process download {
         path("foodb"), path("genbank_summary.tsv"), path("refseq_catalog.tsv.gz") into tax_dbs, dbs
 
     """
-    wget $foodb -O foodb.tgz \
-    wget $refseq_catalog -O refseq_catalog.tsv.gz \
-    wget $genbank_summary -O genbank_summary.tsv \
-    tar -xf foodb.tgz \
-    zcat refseq_catalog.tsv.gz | cut -f 1 > refseq_taxids.txt \
-    cut -f 6 genbank_summary.tsv | tail -n +3 > genbank_taxids.txt \
+    wget $foodb -O foodb.tgz && \
+    wget $refseq_catalog -O refseq_catalog.tsv.gz && \
+    wget $genbank_summary -O genbank_summary.tsv && \
+    tar -xf foodb.tgz && \
+    zcat refseq_catalog.tsv.gz | cut -f 1 > refseq_taxids.txt && \
+    cut -f 6 genbank_summary.tsv | tail -n +3 > genbank_taxids.txt && \
     cut -d "," -f 3 foodb/Foods.csv > food_taxids.txt
     """
 }
