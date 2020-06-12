@@ -7,6 +7,7 @@ taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
 
 
 process download {
+    cpus 1
     publishDir "$baseDir/data/dbs"
 
     output:
@@ -22,6 +23,7 @@ process download {
 }
 
 process get_taxids {
+    cpus 1
 
     input:
     tuple path(foodb), path(gb_summary), path(refseq_cat) from dbs
@@ -48,6 +50,7 @@ process get_taxids {
 }
 
 process download_taxa_dbs {
+    cpus 1
 
     output:
     path("taxdump") into taxa_db
@@ -59,6 +62,7 @@ process download_taxa_dbs {
 }
 
 process get_lineage {
+    cpus 1
 
     input:
     tuple path(foodb), path(taxids), path(gb_summary), path(taxadb) from taxids.combine(taxa_db)
@@ -74,6 +78,7 @@ process get_lineage {
 }
 
 process match_taxids {
+    cpus 1
     publishDir "$baseDir/data"
 
     input:
@@ -88,6 +93,7 @@ process match_taxids {
 }
 
 process download_sequences {
+    cpus 1
     publishDir "$baseDir/data/sequences"
 
     input:
@@ -114,26 +120,27 @@ process setup_kraken_db {
 }
 
 process add_sequences {
-    cpus 1
+    cpus 5
 
     input:
     path(fasta) from sequences.flatMap()
     each path(db) from db
 
     output:
-    tuple path("$fasta"), path("$db") into added_db
+    tuple val("$fasta"), path("$db") into added_db
 
     """
     gunzip -c $fasta > ${fasta.baseName} && \
-    kraken2-build --add-to-library ${fasta.baseName} --db $db && \
+    kraken2-build --add-to-library ${fasta.baseName} --db $db --threads ${task.cpus} && \
     rm ${fasta.baseName}
     """
 }
 
 process build_kraken_db {
+    cpus 20
 
     input:
-    tuple path(fasta), path(db) from added_db.last()
+    tuple val(fasta), path(db) from added_db.last()
 
     output:
     path("$db") into built_db
@@ -144,6 +151,7 @@ process build_kraken_db {
 }
 
 process setup_bracken {
+    cpus 20
 
     input:
     path(db) from built_db
@@ -152,6 +160,6 @@ process setup_bracken {
     path("$db") into bracken_db
 
     """
-    bracken-build -d $db -t ${process.cpus} -k 35 -l 150
+    bracken-build -d $db -t ${task.cpus} -k 35 -l 100
     """
 }

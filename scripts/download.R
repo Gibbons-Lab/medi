@@ -38,9 +38,12 @@ download_genome <- function(hit, out_dir="sequences") {
         flog.info("Failed downloading %s :(", hits$url)
         return(NULL)
     }
-    fi <- fasta.index(hit$filename)
-    hit$num_records <- nrow(fi)
-    hit$seqlength <- as.double(sum(fi$seqlength))
+    fa <- readDNAStringSet(hit$filename)
+    names(fa) <- paste0("kraken:taxid|", as.character(hit$matched_taxid),
+                        " ", names(fa))
+    writeXStringSet(fa, hit$filename, compress = "gzip")
+    hit$num_records <- length(fa)
+    hit$seqlength <- as.double(sum(width(fa)))
     return(hit)
 }
 
@@ -53,22 +56,28 @@ download_sequences <- function(hits, taxid, out_dir="sequences") {
         Sys.sleep(1/rate)
         if (file.exists(filename)) unlink(filename)
         fetch <- suppressMessages(
-            tryCatch(
                 efetch(post, db = "nuccore",
-                       rettype = "fasta", retmode = "text",
-                       outfile = filename),
-                error = function(e) return(NULL),
-                warning = function(w) return(NULL)
-            )
+                       rettype = "fasta", retmode = "text")
         )
-        if (!is.null(fetch)) break
+        if (length(getError(fetch)) == 1) {
+            write(content(fetch), filename)
+            break
+        }
     }
-    gzip(filename)
+    if (!file.exists(filename) || !grepl(">", content(fetch))) {
+        flog.info("Failed downloading %s :(", taxid)
+        return(NULL)
+    }
     hit <- hits[1]
     hit$filename <- paste0(filename, ".gz")
-    fi <- fasta.index(hit$filename)
-    hit$num_records <- nrow(fi)
-    hit$seqlength <- sum(fi$seqlength)
+    fa <- readDNAStringSet(filename)
+    names(fa) <- paste0("kraken:taxid|", as.character(taxid),
+                        " ", names(fa))
+    writeXStringSet(fa, hit$filename, compress = "gzip")
+    unlink(filename)
+
+    hit$num_records <- length(fa)
+    hit$seqlength <- as.double(sum(width(fa)))
     return(hit)
 }
 
