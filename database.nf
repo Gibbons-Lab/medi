@@ -1,9 +1,9 @@
 // Build the FOODB genome database
 
 foodb = "https://foodb.ca/public/system/downloads/foodb_2020_4_7_csv.tar.gz"
-refseq_summary = "https://ftp.ncbi.nlm.nih.gov/refseq/release/release-catalog/release200.accession2geneid.gz"
 genbank_summary = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
 taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
+params.additional_dbs = ["bacteria", "archaea", "human", "viral"]
 
 
 process download {
@@ -11,7 +11,7 @@ process download {
     publishDir "$baseDir/data/dbs"
 
     output:
-    tuple  path("foodb"), path("genbank_summary.tsv"), path("refseq_summary.tsv.gz") into dbs
+    tuple path("foodb"), path("genbank_summary.tsv"), path("refseq_summary.tsv.gz") into dbs
 
     """
     wget $foodb -O foodb.tgz && \
@@ -36,16 +36,13 @@ process get_taxids {
 
     library(data.table)
 
-    dt <- fread("zcat < $refseq_cat", sep="\t", header=F)
-    refseq <- dt[!is.na(V1), .(taxid = as.character(unique(V1)))]
-    refseq[, "source" := "refseq"]
     dt <- fread("$genbank_summary", sep="\t")
     genbank <- dt[!is.na(taxid), .(taxid = as.character(unique(taxid)))]
     genbank[, "source" := "genbank"]
     dt <- fread("$foodb/Food.csv")
     foodb <- dt[!is.na(ncbi_taxonomy_id), .(taxid = ncbi_taxonomy_id)]
     foodb[, "source" := "foodb"]
-    fwrite(rbind(genbank, refseq, foodb), "taxids.tsv", col.names=F, sep="\t")
+    fwrite(rbind(genbank, foodb), "taxids.tsv", col.names=F, sep="\t")
     """
 }
 
@@ -85,7 +82,7 @@ process match_taxids {
     tuple path(foodb), path(lineage), path(lineage_ids), path(gb_summary) from lineage
 
     output:
-    path("matches.csv") into matches
+    path("matches.csv") into matches, food_matches
 
     """
     Rscript $baseDir/scripts/match.R $lineage_ids $gb_summary
@@ -136,11 +133,26 @@ process add_sequences {
     """
 }
 
+process add_existing {
+    cpus 4
+
+    input:
+    tuple val(fasta), path(db) from added_db.last()
+    each group from params.additional_dbs
+
+    output:
+    path("$db") into completed_db
+
+    """
+    kraken2-build --download-library $group --db $db --threads ${task.cpus} --use-ftp
+    """
+}
+
 process build_kraken_db {
     cpus 20
 
     input:
-    tuple val(fasta), path(db) from added_db.last()
+    path(db) from completed_db.last()
 
     output:
     path("$db") into built_db
@@ -162,4 +174,20 @@ process setup_bracken {
     """
     bracken-build -d $db -t ${task.cpus} -k 35 -l 100
     """
+}
+
+process food_mappings {
+    cpus 20
+    publishDir "$baseDir/data/dbs"
+
+    input:
+    path(matches) from food_matches
+
+    output:
+    tuple path("food_matches.csv"), path("food_contents.csv.gz") into food_db
+
+    """
+    Rscript $baseDir/scripts/food_mapping.R $baseDir/data/dbs $matches
+    """
+
 }

@@ -16,8 +16,6 @@ if (is.null(getOption("reutils.api.key"))) {
     rate <- 9
 }
 
-
-
 genbank_quality <- function(dt) {
     dt <- copy(dt)[order(-seq_rel_date)]
     dt[, "score" := 0]
@@ -100,7 +98,10 @@ trials <- data.table(
     rank = rep(c("species", "genus"), 2),
     db = rep(c("genbank", "nucleotide"), each = 2)
 )
-
+flog.info(
+    "Trying the following matching strategy:\n%s", \
+    capture.output(trials)
+)
 matches <- NULL
 for (i in 1:nrow(trials)) {
     rank = trials[i, rank]
@@ -109,10 +110,17 @@ for (i in 1:nrow(trials)) {
     m <- ordered_match(queries, gb_taxa, gbs, db = db, rank = rank)
     matches <- rbind(matches, m, fill = TRUE, use.names = TRUE)
 }
-
-flog.info("Matched %d/%d taxa.", matches[, uniqueN(orig_taxid)], food[, uniqueN(orig_taxid)])
-flog.info("Matches by strategy:\n%s", capture.output(matches[, uniqueN(id), by = c("db", "rank")]))
-
+matches <- unique(food[, c("orig_taxid", RANKS), with = FALSE])[
+    matches, on="orig_taxid"]
 fwrite(matches, "matches.csv")
+
+flog.info(
+    "Matched %d/%d taxa.",
+    matches[, uniqueN(orig_taxid)], food[, uniqueN(orig_taxid)]
+)
+flog.info(
+    "Matches by strategy:\n%s",
+    capture.output(matches[, uniqueN(id), by = c("db", "rank")])
+)
 
 

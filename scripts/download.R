@@ -39,7 +39,9 @@ download_genome <- function(hit, out_dir="sequences") {
         return(NULL)
     }
     fa <- readDNAStringSet(hit$filename)
-    names(fa) <- paste0("kraken:taxid|", as.character(hit$matched_taxid),
+    short_names <- tstrsplit(names(fa), "\\s+")[[1]]
+    names(fa) <- paste0(short_names, "|kraken:taxid|",
+                        as.character(hit$matched_taxid),
                         " ", names(fa))
     writeXStringSet(fa, hit$filename, compress = "gzip")
     hit$num_records <- length(fa)
@@ -71,7 +73,9 @@ download_sequences <- function(hits, taxid, out_dir="sequences") {
     hit <- hits[1]
     hit$filename <- paste0(filename, ".gz")
     fa <- readDNAStringSet(filename)
-    names(fa) <- paste0("kraken:taxid|", as.character(taxid),
+    short_names <- tstrsplit(names(fa), "\\s+")[[1]]
+    names(fa) <- paste0(short_names, "|kraken:taxid|",
+                        as.character(hit$matched_taxid),
                         " ", names(fa))
     writeXStringSet(fa, hit$filename, compress = "gzip")
     unlink(filename)
