@@ -1,9 +1,12 @@
+#!/usr/bin/env nextflow
+
 // Build the FOODB genome database
+
+nextflow.enable.dsl = 2
 
 foodb = "https://foodb.ca/public/system/downloads/foodb_2020_4_7_csv.tar.gz"
 genbank_summary = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
 taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
-params.additional_dbs = ["bacteria", "archaea", "human", "viral"]
 
 
 process download {
@@ -11,12 +14,11 @@ process download {
     publishDir "$baseDir/data/dbs"
 
     output:
-    tuple path("foodb"), path("genbank_summary.tsv"), path("refseq_summary.tsv.gz") into dbs
+    tuple path("foodb"), path("genbank_summary.tsv")
 
     """
-    wget $foodb -O foodb.tgz && \
-    wget $refseq_summary -O refseq_summary.tsv.gz && \
-    wget $genbank_summary -O genbank_summary.tsv && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 $foodb -O foodb.tgz && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 $genbank_summary -O genbank_summary.tsv && \
     tar -xf foodb.tgz && \
     mv foodb_2020_04_07_csv foodb
     """
@@ -26,10 +28,10 @@ process get_taxids {
     cpus 1
 
     input:
-    tuple path(foodb), path(gb_summary), path(refseq_cat) from dbs
+    tuple path(foodb), path(gb_summary)
 
     output:
-    tuple path("foodb"), path("taxids.tsv"), path("$gb_summary") into taxids
+    tuple path("foodb"), path("taxids.tsv"), path("$gb_summary")
 
     """
     #!/usr/bin/env Rscript
@@ -50,11 +52,12 @@ process download_taxa_dbs {
     cpus 1
 
     output:
-    path("taxdump") into taxa_db
+    path("taxdump")
 
     """
-    wget ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz && \
-    mkdir taxdump && tar -xf taxdump.tar.gz --directory taxdump
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 \
+        ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz && \
+        mkdir taxdump && tar -xf taxdump.tar.gz --directory taxdump
     """
 }
 
@@ -62,10 +65,10 @@ process get_lineage {
     cpus 1
 
     input:
-    tuple path(foodb), path(taxids), path(gb_summary), path(taxadb) from taxids.combine(taxa_db)
+    tuple path(foodb), path(taxids), path(gb_summary), path(taxadb)
 
     output:
-    tuple path("$foodb"), path("lineage.txt"), path("lineage_ids.txt"), path("$gb_summary") into lineage
+    tuple path("$foodb"), path("lineage.txt"), path("lineage_ids.txt"), path("${gb_summary}")
 
     """
     taxonkit lineage --data-dir $taxadb -i 1 $taxids > raw.txt && \
@@ -79,10 +82,10 @@ process match_taxids {
     publishDir "$baseDir/data"
 
     input:
-    tuple path(foodb), path(lineage), path(lineage_ids), path(gb_summary) from lineage
+    tuple path(foodb), path(lineage), path(lineage_ids), path(gb_summary)
 
     output:
-    path("matches.csv") into matches, food_matches
+    path("matches.csv")
 
     """
     Rscript $baseDir/scripts/match.R $lineage_ids $gb_summary
@@ -90,104 +93,84 @@ process match_taxids {
 }
 
 process download_sequences {
-    cpus 1
-    publishDir "$baseDir/data/sequences"
+    cpus 8
+    memory "64 GB"
+
+    publishDir "$baseDir/data/"
 
     input:
-    path(matches) from matches
+    path(matches)
 
     output:
-    path("sequences/*.fna.gz") into sequences
-    path("manifest.csv") into manifest
+    tuple path("sequences/*.fna.gz"), path("manifest.csv")
 
     """
     Rscript $baseDir/scripts/download.R $matches $task.cpus sequences
     """
 }
 
-process setup_kraken_db {
-    publishDir "$baseDir/data"
-
-    output:
-    path("kraken2_db") into db
-
-    """
-    kraken2-build --download-taxonomy --db kraken2_db --use-ftp
-    """
-}
-
-process add_sequences {
-    cpus 5
-
-    input:
-    path(fasta) from sequences.flatMap()
-    each path(db) from db
-
-    output:
-    tuple val("$fasta"), path("$db") into added_db
-
-    """
-    gunzip -c $fasta > ${fasta.baseName} && \
-    kraken2-build --add-to-library ${fasta.baseName} --db $db --threads ${task.cpus} && \
-    rm ${fasta.baseName}
-    """
-}
-
-process add_existing {
-    cpus 4
-
-    input:
-    tuple val(fasta), path(db) from added_db.last()
-    each group from params.additional_dbs
-
-    output:
-    path("$db") into completed_db
-
-    """
-    kraken2-build --download-library $group --db $db --threads ${task.cpus} --use-ftp
-    """
-}
-
-process build_kraken_db {
-    cpus 20
-
-    input:
-    path(db) from completed_db.last()
-
-    output:
-    path("$db") into built_db
-
-    """
-    kraken2-build --build --db $db --threads ${task.cpus}
-    """
-}
-
-process setup_bracken {
-    cpus 20
-
-    input:
-    path(db) from built_db
-
-    output:
-    path("$db") into bracken_db
-
-    """
-    bracken-build -d $db -t ${task.cpus} -k 35 -l 100
-    """
-}
 
 process food_mappings {
-    cpus 20
+    cpus 1
+    memory "64 GB"
     publishDir "$baseDir/data/dbs"
 
     input:
-    path(matches) from food_matches
+    path(matches)
 
     output:
-    tuple path("food_matches.csv"), path("food_contents.csv.gz") into food_db
+    tuple path("food_matches.csv"), path("food_contents.csv.gz")
 
     """
-    Rscript $baseDir/scripts/food_mapping.R $baseDir/data/dbs $matches
+    Rscript $baseDir/scripts/food_mapping.R $baseDir/data/dbs/foodb $matches
     """
+}
 
+process sketch {
+    cpus 2
+    memory "4 GB"
+    publishDir "${launchDir}/data/sketches"
+
+    input:
+    path(seq)
+
+    output:
+    path("*.sig")
+
+    """
+    sourmash sketch dna -p k=21,k=31,k=51,scaled=1000 ${seq}
+    """
+}
+
+process ANI {
+    cpus 12
+    memory "64 GB"
+    publishDir "${launchDir}/data", mode: "copy", overwite: true
+
+    input:
+    path(sigs)
+
+    output:
+    path("mash_ani.csv")
+
+    """
+    sourmash compare -k 21 --ani -p ${task.cpus} --csv mash_ani.csv ${sigs}
+    """
+}
+
+
+workflow {
+    download() | get_taxids
+    download_taxa_dbs()
+    get_lineage(get_taxids.out.combine(download_taxa_dbs.out))
+        | match_taxids
+        | download_sequences
+
+    download_sequences.out.map{it[0]}.flatten().set{seqs}
+
+
+    seqs | sketch
+    ANI(sketch.out.collect())
+
+    food_mappings(match_taxids.out)
 }

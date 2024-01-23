@@ -1,12 +1,13 @@
 # helper functions to match based on phylogenetic ranks
 
 library(data.table)
-library(reutils)
+library(R.utils)
 library(magrittr)
 library(futile.logger)
+library(reutils)
 
 ASSEMBLY_SEARCH <- "txid%s[orgn]"
-NT_SEARCH <- "txid%s[orgn] AND 10000:1000000000[SLEN] AND biomol_genomic[PROP]"
+NT_SEARCH <- "txid%s[orgn] AND 10000:10000000000[SLEN] AND biomol_genomic[PROP]"
 GB_SCORES <- c(Contig = 0, Chromosome = 1, Scaffold = 1, `Complete Genome` = 2)
 
 
@@ -26,6 +27,13 @@ genbank_quality <- function(dt) {
     return(dt)
 }
 
+not_found <- function(res) {
+    if (is.character(getError(res)$wrnmsg)) {
+        return(getError(res)$wrnmsg == "No items found.")
+    }
+    return(FALSE)
+}
+
 find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
     url <- NULL
     taxid <- as.character(taxid)[!is.na(taxid)]
@@ -40,17 +48,28 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         } else {
             matches <- matches[score == max(score)]
         }
-        uids <- matches[, `# assembly_accession`]
+        uids <- matches[, `#assembly_accession`]
         url <- matches[, ftp_path]
     } else {
-        Sys.sleep(1/rate)
-        tids <- as.character(taxid)
-        flog.info("Querying the nt database for taxon %s...", taxid)
-        uids <- suppressMessages(esearch(
-            sprintf(NT_SEARCH, as.character(taxid)),
-            retmax = 500,
-            sort = "SLEN",
-            db = "nuccore")) %>% uid()
+        r <- rate
+        for (i in 0:7) {
+            Sys.sleep(1/rate + 2^i)
+            tids <- as.character(taxid)
+            flog.info("Querying the nt database for taxon %s...", taxid)
+            ret <- suppressMessages(esearch(
+                sprintf(NT_SEARCH, as.character(taxid)),
+                retmax = 500,
+                sort = "SLEN",
+                db = "nuccore"))
+            if (ret$no_errors() || not_found(ret)) {
+                break
+            }
+            if (i==7) {
+                flog.info("Querying failed for %s. Aborting.", taxid)
+                stop()
+            }
+        }
+        uids <- ret %>% uid()
         uids <- uids[!is.na(uids)]
     }
     if (length(uids) == 0) return(NULL)
@@ -99,7 +118,7 @@ trials <- data.table(
     db = rep(c("genbank", "nucleotide"), each = 2)
 )
 flog.info(
-    "Trying the following matching strategy:\n%s", \
+    "Trying the following matching strategy:\n%s",
     capture.output(trials)
 )
 matches <- NULL
@@ -118,9 +137,8 @@ flog.info(
     "Matched %d/%d taxa.",
     matches[, uniqueN(orig_taxid)], food[, uniqueN(orig_taxid)]
 )
-flog.info(
-    "Matches by strategy:\n%s",
-    capture.output(matches[, uniqueN(id), by = c("db", "rank")])
-)
+flog.info("Matches by strategy:\n")
+print(matches[, uniqueN(id), by = c("db", "rank")])
+
 
 
