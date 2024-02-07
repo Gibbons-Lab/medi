@@ -95,3 +95,10 @@ nextflow run quant.nf --db=/path/to/medi_db
 ```
 
 Where `/path/to/medi_db/` should be the output directory from step (3). Usually `medi/data/medi_db`.
+
+## TODO
+
+- submit architeuthis to bioconda for easier installation
+- see if we can provide a reduced DB for download
+- make execution more flexible
+- rename `scripts` folder to `bin` for autodiscovery
