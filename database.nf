@@ -2,6 +2,8 @@
 
 // Build the FOODB genome database
 
+params.max_threads = 20
+
 nextflow.enable.dsl = 2
 
 foodb = "https://foodb.ca/public/system/downloads/foodb_2020_4_7_csv.tar.gz"
@@ -143,7 +145,7 @@ process sketch {
 }
 
 process ANI {
-    cpus 12
+    cpus params.max_threads
     memory "64 GB"
     publishDir "${launchDir}/data", mode: "copy", overwite: true
 

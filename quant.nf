@@ -1,10 +1,9 @@
 #!/usr/bin/env nextflow
-params.refs = "/proj/gibbons/refs"
 params.out_dir = "${launchDir}/data"
 params.data_dir = "${launchDir}/data"
-params.kraken2_db = "${params.refs}/k2_foods_202306/"
-params.foods = "${params.refs}/k2_foods_202306/food_matches.csv"
-params.food_contents = "${params.refs}/k2_foods_202306/food_contents.csv.gz"
+params.db = "medi_db"
+params.foods = "${params.db}/food_matches.csv"
+params.food_contents = "${params.db}/food_contents.csv.gz"
 params.single_end = false
 params.trim_front = 5
 params.min_length = 50
@@ -176,7 +175,7 @@ process quantify {
 
     """
     Rscript \
-        ${projectDir}/scripts/quantify.R ${params.foods}            \
+        ${projectDir}/scripts/quantify.R ${params.foods} \
         ${params.food_contents} ${files}
     """
 }

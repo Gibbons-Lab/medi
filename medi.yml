@@ -1,0 +1,23 @@
+name: medi
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python>=3.10
+  - nextflow>=23.10.0
+  - fastp
+  - kraken2==2.1.2
+  - bracken==2.6.0
+  - prodigal
+  - multiqc
+  - biopython
+  - sourmash
+  - pandas
+  - r-base
+  - r-data.table
+  - r-reutils
+  - r-r.utils
+  - r-magrittr
+  - r-futile.logger
+  - bioconductor-biostrings
