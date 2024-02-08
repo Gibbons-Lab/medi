@@ -174,9 +174,7 @@ process quantify {
     tuple path("food_abundance.csv"), path("food_content.csv")
 
     """
-    Rscript \
-        ${projectDir}/scripts/quantify.R ${params.foods} \
-        ${params.food_contents} ${files}
+    quantify.R ${params.foods} ${params.food_contents} ${files}
     """
 }
 
