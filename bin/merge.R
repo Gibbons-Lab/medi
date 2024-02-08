@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # merge a bunch of CSVs
 # first argument is output file and the rest the files to merge
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # helper functions to match based on phylogenetic ranks
 
 library(data.table)

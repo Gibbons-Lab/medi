@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # Creates a mapping of Food content to taxonomy IDs
 
 library(data.table)

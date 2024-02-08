@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # Quantify the food abundances and contents
 
 library(data.table)
