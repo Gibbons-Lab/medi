@@ -107,6 +107,9 @@ taxids <- fread(args[1], sep="\t",
     col.names = c("orig_taxid", "source", "lineage", "names", "taxids"))
 
 gbs <- fread(args[2], sep="\t")
+# Some assemblies seem to have new existing release in never Genbank versions.
+# Only keep the ones actually available.
+gbs <- gbs[grepl("ftp.ncbi.nlm.nih.gov", ftp_path, fixed = TRUE)]
 gbs[, "taxid" := as.character(taxid)]
 setkey(gbs, taxid)
 taxids[, (RANKS) := tstrsplit(names, ";")]
@@ -141,6 +144,3 @@ flog.info(
 )
 flog.info("Matches by strategy:\n")
 print(matches[, uniqueN(id), by = c("db", "rank")])
-
-
-
