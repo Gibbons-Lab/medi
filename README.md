@@ -101,4 +101,3 @@ Where `/path/to/medi_db/` should be the output directory from step (3). Usually 
 - submit architeuthis to bioconda for easier installation
 - see if we can provide a reduced DB for download
 - make execution more flexible
-- rename `scripts` folder to `bin` for autodiscovery

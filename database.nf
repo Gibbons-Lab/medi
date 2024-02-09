@@ -90,7 +90,7 @@ process match_taxids {
     path("matches.csv")
 
     """
-    Rscript $baseDir/scripts/match.R $lineage_ids $gb_summary
+    match.R $lineage_ids $gb_summary
     """
 }
 
@@ -107,7 +107,7 @@ process download_sequences {
     tuple path("sequences/*.fna.gz"), path("manifest.csv")
 
     """
-    Rscript $baseDir/scripts/download.R $matches $task.cpus sequences
+    download.R $matches $task.cpus sequences
     """
 }
 
@@ -124,7 +124,7 @@ process food_mappings {
     tuple path("food_matches.csv"), path("food_contents.csv.gz")
 
     """
-    Rscript $baseDir/scripts/food_mapping.R $baseDir/data/dbs/foodb $matches
+    food_mapping.R $baseDir/data/dbs/foodb $matches
     """
 }
 
