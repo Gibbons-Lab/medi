@@ -154,6 +154,5 @@ workflow {
     library(build_kraken_db.out)
 
     self_classify(library.out, build_kraken_db)
-    merge(classify.out.collect(), build_kraken_db)
-    build_bracken(merge.out) | add_food_info
+    build_bracken(self_classify.out) | add_food_info
 }
