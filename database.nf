@@ -40,7 +40,9 @@ process get_taxids {
 
     library(data.table)
 
-    dt <- fread("$genbank_summary", sep="\t")
+    dt <- fread("$genbank_summary", sep="\t")[
+        grepl("ftp.ncbi.nlm.nih.gov", ftp_path, fixed = TRUE)
+    ]
     genbank <- dt[!is.na(taxid), .(taxid = as.character(unique(taxid)))]
     genbank[, "source" := "genbank"]
     dt <- fread("$foodb/Food.csv")
