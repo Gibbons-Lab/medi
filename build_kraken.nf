@@ -72,7 +72,7 @@ process build_kraken_db {
     """
     kraken2-build --build --db $db \
         --threads ${task.cpus} \
-        --max-db-size ${Integer.parseInt(params.max_db_size)*Integer(1e9)}
+        --max-db-size ${(params.max_db_size as BigInteger) * (1000G**3)}
     """
 }
 
