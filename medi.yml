@@ -23,3 +23,4 @@ dependencies:
   - r-futile.logger
   - bioconductor-biostrings
   - taxonkit
+  - architeuthis>=0.2.1

@@ -32,9 +32,6 @@ cd medi
 conda env create -n medi -f medi.yml
 ```
 
-Finally download the appropriate [binary version for architeuthis](https://github.com/cdiener/architeuthis/releases/tag/0.1.2)
-extract it and copy it to somwhere in your path (usually `~/bin`).
-
 After that activate the environment.
 
 ```bash
