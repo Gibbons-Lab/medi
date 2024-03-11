@@ -153,6 +153,6 @@ workflow {
 
     library(build_kraken_db.out)
 
-    self_classify(library.out, build_kraken_db)
+    self_classify(library.out, build_kraken_db.out)
     build_bracken(self_classify.out) | add_food_info
 }
