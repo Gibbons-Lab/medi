@@ -33,19 +33,19 @@ process get_taxids {
     tuple path(foodb), path(gb_summary)
 
     output:
-    tuple path("foodb"), path("taxids.tsv"), path("$gb_summary")
+    tuple path("foodb"), path("taxids.tsv"), path("${gb_summary}")
 
     """
     #!/usr/bin/env Rscript
 
     library(data.table)
 
-    dt <- fread("$genbank_summary", sep="\t")[
+    dt <- fread("${gb_summary}", sep="\t")[
         grepl("ftp.ncbi.nlm.nih.gov", ftp_path, fixed = TRUE)
     ]
     genbank <- dt[!is.na(taxid), .(taxid = as.character(unique(taxid)))]
     genbank[, "source" := "genbank"]
-    dt <- fread("$foodb/Food.csv")
+    dt <- fread("${foodb}/Food.csv")
     foodb <- dt[!is.na(ncbi_taxonomy_id), .(taxid = ncbi_taxonomy_id)]
     foodb[, "source" := "foodb"]
     fwrite(rbind(genbank, foodb), "taxids.tsv", col.names=F, sep="\t")
