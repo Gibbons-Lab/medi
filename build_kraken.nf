@@ -6,6 +6,8 @@ params.additional_dbs = ["bacteria", "archaea", "human", "viral", "plasmid", "Un
 params.max_db_size = 500
 params.confidence = 0.3
 params.max_threads = 20
+params.rebuild = false
+params.db = "${launchDir}/data/medi_db"
 
 process setup_kraken_db {
     cpus 1
@@ -22,6 +24,7 @@ process setup_kraken_db {
 process add_sequences {
     cpus 5
     memory "16 GB"
+    publishDir "$baseDir/data"
 
     input:
     path(fasta)
@@ -82,7 +85,6 @@ process self_classify {
     memory "${params.max_db_size} GB"
 
     input:
-    path(k2)
     path(db)
 
     output:
@@ -92,7 +94,7 @@ process self_classify {
     kraken2 --db ${db} --threads ${task.cpus} \
         --confidence ${params.confidence} \
         --threads ${task.cpus} \
-        --memory-mapping <( cat ${k2} ) > ${db}/database.kraken
+        --memory-mapping ${db}/library/*/*.f*a > ${db}/database.kraken
     """
 }
 
@@ -140,19 +142,22 @@ process add_food_info {
     path("$db")
 
     """
-    cp ${launchDir}/data/{food_matches.csv,food_contents.csv.gz} ${db}
+    cp ${launchDir}/data/dbs/{food_matches.csv,food_contents.csv.gz} ${db}
     """
 }
 
 workflow {
-    Channel.fromPath("${baseDir}/data/sequences/*.fna.gz").set{food_sequences}
-    setup_kraken_db()
-    add_existing(setup_kraken_db.out, params.additional_dbs)
-    add_sequences(food_sequences, add_existing.out.last())
-    build_kraken_db(add_sequences.out.last())
+    if !params.rebuild {
+        Channel.fromPath("${baseDir}/data/sequences/*.fna.gz").set{food_sequences}
+        setup_kraken_db()
+        add_existing(setup_kraken_db.out, params.additional_dbs)
+        add_sequences(food_sequences, add_existing.out.last())
+        db = add_sequences.out.last()
+    } else {
+        db = Channel.fromPath(params.db)
+    }
 
-    library(build_kraken_db.out)
-
-    self_classify(library.out, build_kraken_db.out)
+    build_kraken_db(db)
+    self_classify(db)
     build_bracken(self_classify.out) | add_food_info
 }
