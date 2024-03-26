@@ -47,7 +47,7 @@ to use for any single process.
 ## (1-2) Matching and downloading
 
 ```bash
-nextflow run database.nf
+nextflow run -resume database.nf
 ```
 
 This will boostrap the database from nothing, downloading all required files and performing
@@ -71,6 +71,11 @@ will use no reduction but you can set this to a lower level which will create a
 smaller but less accurate hash. Note that for good performance you will need more
 RAM than what you choose here.
 
+Note that this step of the pipeline will not work with the `-resume` option. The `add_*` need
+to finish completely or the pipeline needs to be restarted from the beginning. Should this
+work and the later steps crash, you can trigger a just the hash building using the
+`--rebuild` option which will rebuild the database but not attempt to add sequences again.
+
 ## (4) Quantification for MGS samples
 
 For your own sequencing data create a directory and either copy or link the medi
@@ -88,13 +93,13 @@ demultiplexed FASTQ files. So it should look like:
 After that you can run MEDI with
 
 ```bash
-nextflow run quant.nf --db=/path/to/medi_db
+nextflow run quant.nf -resume --db=/path/to/medi_db
 ```
 
 Where `/path/to/medi_db/` should be the output directory from step (3). Usually `medi/data/medi_db`.
 
 ## TODO
 
-- submit architeuthis to bioconda for easier installation
 - see if we can provide a reduced DB for download
 - make execution more flexible
+- add resource limits for individual steps for Grid clusters
