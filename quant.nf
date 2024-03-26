@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 params.out_dir = "${launchDir}/data"
 params.data_dir = "${launchDir}/data"
-params.db = "medi_db"
+params.db = "data/medi_db"
 params.foods = "${params.db}/food_matches.csv"
 params.food_contents = "${params.db}/food_contents.csv.gz"
 params.single_end = false
@@ -62,7 +62,7 @@ process kraken {
     script:
     if (params.single_end)
         """
-        kraken2 --db ${params.kraken2_db} \
+        kraken2 --db ${params.db} \
             --confidence ${params.confidence} \
             --threads ${task.cpus} --gzip-compressed --output ${id}.k2 \
             --memory-mapping --report ${id}.tsv ${reads}
@@ -70,7 +70,7 @@ process kraken {
 
     else
         """
-        kraken2 --db ${params.kraken2_db} --paired \
+        kraken2 --db ${params.db} --paired \
             --confidence ${params.confidence} \
             --threads ${task.cpus} --gzip-compressed --output ${id}.k2 \
             --memory-mapping --report ${id}.tsv  ${reads[0]} ${reads[1]}
@@ -89,7 +89,7 @@ process architeuthis_filter {
 
     """
     architeuthis mapping filter ${k2} \
-        --data-dir ${params.kraken2_db}/taxonomy \
+        --data-dir ${params.db}/taxonomy \
         --min-consistency 0.95 --max-entropy 0.1 \
         --max-multiplicity 4 \
         --out ${id}_filtered.k2
@@ -109,7 +109,7 @@ process summarize_mappings {
     path("${id}_mapping.csv")
 
     """
-    architeuthis mapping summary ${k2} --data-dir ${params.kraken2_db}/taxonomy --out ${id}_mapping.csv
+    architeuthis mapping summary ${k2} --data-dir ${params.db}/taxonomy --out ${id}_mapping.csv
     """
 }
 
@@ -128,20 +128,6 @@ process merge_mappings {
     """
 }
 
-process download_taxa_dbs {
-    errorStrategy 'retry'
-    maxRetries 3
-    cpus 1
-    memory "4 GB"
-
-    output:
-    path("taxdump")
-
-    """
-    cp -r ${params.kraken2_db}/taxonomy taxdump
-    """
-}
-
 process count_taxa {
     cpus 4
     memory "16 GB"
@@ -156,7 +142,7 @@ process count_taxa {
     """
     mkdir ${lev} && \
         sed 's/\\tR1\\t/\\tD\\t/g' ${report} > ${lev}/${report} && \
-        bracken -d ${params.kraken2_db} -i ${lev}/${report} \
+        bracken -d ${params.db} -i ${lev}/${report} \
         -l ${lev} -o ${lev}/${lev}_${id}.b2 -r ${params.read_length} \
         -t ${params.threshold} -w ${lev}/${id}_bracken.tsv
     """
@@ -205,7 +191,7 @@ process add_lineage {
     path("${lev}_counts.csv")
 
     """
-    architeuthis lineage ${merged} --data-dir ${params.kraken2_db}/taxonomy --out ${lev}_counts.csv
+    architeuthis lineage ${merged} --data-dir ${params.db}/taxonomy --out ${lev}_counts.csv
     """
 }
 
@@ -222,34 +208,6 @@ process multiqc {
     """
     multiqc ${params.out_dir}/preprocessed ${params.out_dir}/kraken2
     """
-}
-
-process build_matrices {
-    publishDir "${params.out_dir}", mode: "copy", overwrite: true
-
-    input:
-    val(feature_type)
-    path(merged_counts)
-    path(abundances)
-    path(features)
-
-    output:
-    tuple path("table_food_*.csv"), path("*_summary_*.csv")
-
-    """
-    #!/usr/bin/env python
-
-    import pandas as pd
-    from os.path import basename
-
-    counts = pd.read_csv(merged_counts, index=False)
-    feature_type = "${feature_type}"
-    features = pd.read_csv("${features}", index=False)
-
-    abundances = pd.read_csv("${abundances}", index=False)
-    table = abundances.pivot_table(index="sample_id", columns="")
-    """
-
 }
 
 workflow {
