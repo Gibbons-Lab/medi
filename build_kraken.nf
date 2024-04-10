@@ -147,7 +147,7 @@ process add_food_info {
 }
 
 workflow {
-    if !params.rebuild {
+    if (!params.rebuild) {
         Channel.fromPath("${baseDir}/data/sequences/*.fna.gz").set{food_sequences}
         setup_kraken_db()
         add_existing(setup_kraken_db.out, params.additional_dbs)
