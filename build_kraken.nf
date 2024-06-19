@@ -158,6 +158,6 @@ workflow {
     }
 
     build_kraken_db(db)
-    self_classify(db)
+    self_classify(build_kraken_db.out)
     build_bracken(self_classify.out) | add_food_info
 }
