@@ -12,6 +12,7 @@ params.read_length = 150
 params.threshold = 10
 params.confidence = 0.3
 params.mapping = false
+params.batchsize = 50
 
 Channel
     .fromList(["D", "G", "S"])
@@ -50,31 +51,78 @@ process preprocess {
         """
 }
 
-process kraken {
+process kraken_paired {
     cpus 8
 
     input:
-    tuple val(id), path(reads), path(json), path(html)
+    tuple val(ids), path(fwd_reads), path(rev_reads)
 
     output:
-    tuple val(id), path("${id}.k2"), path("${id}.tsv")
+    path("*.k2")
 
-    script:
-    if (params.single_end)
-        """
-        kraken2 --db ${params.db} \
-            --confidence ${params.confidence} \
-            --threads ${task.cpus} --gzip-compressed --output ${id}.k2 \
-            --memory-mapping --report ${id}.tsv ${reads}
-        """
+    """
+    #!/usr/bin/env python
 
-    else
-        """
-        kraken2 --db ${params.db} --paired \
-            --confidence ${params.confidence} \
-            --threads ${task.cpus} --gzip-compressed --output ${id}.k2 \
-            --memory-mapping --report ${id}.tsv  ${reads[0]} ${reads[1]}
-        """
+    import sys
+    import os
+    from subprocess import run
+
+    ids = "${ids}".split()
+    fwd = "${fwd_reads}".split()
+    rev = "${rev_reads}".split()
+
+    assert len(ids) == len(fwd)
+    assert len(ids) == len(rev)
+
+    for i, idx in enumerate(ids):
+        args = [
+            "kraken2", "${params.db}", "--paired",
+            "--confidence", "${params.confidence}",
+            "--therads", "${task.cpus}", "--gzip-compressed",
+            "--output", f"{idx}.k2", "--memory-mapping",
+            fwd[i], rev[i]
+        ]
+        res = run(args)
+        if res.returncode != 0:
+            os.remove(f"{idx}.k2")
+            sys.exit(res.returncode)
+    """
+}
+
+process kraken_single {
+    cpus 8
+
+    input:
+    tuple val(ids), path(reads)
+
+    output:
+    path("*.k2")
+
+    """
+    #!/usr/bin/env python
+
+    import sys
+    import os
+    from subprocess import run
+
+    ids = "${ids}".split()
+    fwd = "${reads}".split()
+
+    assert len(ids) == len(fwd)
+    assert len(ids) == len(rev)
+
+    for i, idx in enumerate(ids):
+        args = [
+            "kraken2", "${params.db}", "--paired",
+            "--confidence", "${params.confidence}",
+            "--therads", "${task.cpus}", "--gzip-compressed",
+            "--output", f"{idx}.k2", "--memory-mapping", fwd[i]
+        ]
+        res = run(args)
+        if res.returncode != 0:
+            os.remove(f"{idx}.k2")
+            sys.exit(res.returncode)
+    """
 }
 
 process architeuthis_filter {
@@ -82,10 +130,10 @@ process architeuthis_filter {
     publishDir "${params.out_dir}/kraken2", overwrite: true
 
     input:
-    tuple val(id), path(k2), path(report)
+    tuple val(id), path(k2)
 
     output:
-    tuple val(id), path("${id}_filtered.k2"), path(report)
+    tuple val(id), path("${id}_filtered.k2")
 
     """
     architeuthis mapping filter ${k2} \
@@ -94,8 +142,22 @@ process architeuthis_filter {
         --max-multiplicity 4 \
         --out ${id}_filtered.k2
     """
+}
 
+process kraken_report {
+    cpus 1
+    memory "4 GB"
+    publishDir "${params.out_dir}/kraken2", overwrite: true
 
+    input:
+    tuple val(id), path(k2)
+
+    output:
+    tuple val(id), path("*.tsv")
+
+    """
+    kraken2-report ${params.db}/taxo.k2d ${k2} ${id}.tsv
+    """
 }
 
 process summarize_mappings {
@@ -134,7 +196,7 @@ process count_taxa {
     publishDir "${params.out_dir}/bracken", overwrite: true
 
     input:
-    tuple val(id), path(kraken), path(report), val(lev)
+    tuple val(id), path(report), val(lev)
 
     output:
     tuple val(id), val(lev), path("${lev}/${lev}_${id}.b2")
@@ -210,6 +272,20 @@ process multiqc {
     """
 }
 
+def batchify(ch, n, paired = true, batchsize = 10) {
+    idx = Channel
+        .from(0..(n-1))
+        .map{it.intdiv(batchsize)}
+    if (paired) {
+        batched = idx.merge(ch)
+            .map{tuple(it[0], it[1], it[2][0], it[2][1])}
+            .groupTuple()
+    } else {
+        batched = idx.merge(ch).groupTuple()
+    }
+    return batched
+}
+
 workflow {
     // find files
     if (params.single_end) {
@@ -217,6 +293,7 @@ workflow {
             .fromPath("${params.data_dir}/raw/*.fastq.gz")
             .map{row -> tuple(row.baseName.split("\\.fastq")[0], tuple(row))}
             .set{raw}
+        n = file("${params.data_dir}/raw/*.fastq.gz").size()
     } else {
         Channel
             .fromFilePairs([
@@ -226,6 +303,7 @@ workflow {
             ])
             .ifEmpty { error "Cannot find any read files in ${params.data_dir}/raw!" }
             .set{raw}
+        n = file("*.f*.gz").size() / 2
     }
 
     // download taxa dbs
@@ -234,10 +312,17 @@ workflow {
     // quality filtering
     preprocess(raw)
 
+
     // quantify taxa abundances
-    kraken(preprocess.out)
-    architeuthis_filter(kraken.out)
-    count_taxa(architeuthis_filter.out.combine(levels))
+    batched = batchify(preprocess.out, n, !params.single_end, params.batchsize)
+    if (params.single_end) {
+        k2 = kraken_single(batched)
+    } else {
+        k2 = kraken_paired(batched)
+    }
+
+    architeuthis_filter(k2) | kraken_report
+    count_taxa(kraken_report.out.combine(levels))
     count_taxa.out.map{s -> tuple(s[1], s[2])}
         .groupTuple()
         .set{merge_groups}
