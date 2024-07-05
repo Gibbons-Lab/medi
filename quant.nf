@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 params.out_dir = "${launchDir}/data"
 params.data_dir = "${launchDir}/data"
-params.db = "data/medi_db"
+params.db = "${launchDir}/data/medi_db"
 params.foods = "${params.db}/food_matches.csv"
 params.food_contents = "${params.db}/food_contents.csv.gz"
 params.single_end = false
@@ -13,6 +13,10 @@ params.threshold = 10
 params.confidence = 0.3
 params.mapping = false
 params.batchsize = 50
+params.maxcpus = 24
+params.dbmem = null
+
+def db_size = null
 
 Channel
     .fromList(["D", "G", "S"])
@@ -20,8 +24,9 @@ Channel
 
 process preprocess {
     cpus 4
-    memory "8 GB"
+    memory "4 GB"
     publishDir "${params.out_dir}/preprocessed"
+    time "1h"
 
     input:
     tuple val(id), path(reads)
@@ -52,10 +57,12 @@ process preprocess {
 }
 
 process kraken_paired {
-    cpus 8
+    cpus params.maxcpus
+    memory db_size
+    time 2.h + params.batchsize * 0.5.h
 
     input:
-    tuple val(ids), path(fwd_reads), path(rev_reads)
+    tuple val(batch), val(ids), path(fwd_reads), path(rev_reads)
 
     output:
     path("*.k2")
@@ -67,7 +74,7 @@ process kraken_paired {
     import os
     from subprocess import run
 
-    ids = "${ids}".split()
+    ids = "${ids.join(' ')}".split()
     fwd = "${fwd_reads}".split()
     rev = "${rev_reads}".split()
 
@@ -76,24 +83,27 @@ process kraken_paired {
 
     for i, idx in enumerate(ids):
         args = [
-            "kraken2", "${params.db}", "--paired",
+            "kraken2", "--db", "${params.db}", "--paired",
             "--confidence", "${params.confidence}",
-            "--therads", "${task.cpus}", "--gzip-compressed",
+            "--threads", "${task.cpus}", "--gzip-compressed",
             "--output", f"{idx}.k2", "--memory-mapping",
             fwd[i], rev[i]
         ]
         res = run(args)
         if res.returncode != 0:
-            os.remove(f"{idx}.k2")
+            if os.path.exists(f"{idx}.k2"):
+                os.remove(f"{idx}.k2")
             sys.exit(res.returncode)
     """
 }
 
 process kraken_single {
-    cpus 8
+    cpus params.maxcpus
+    memory db_size
+    time 2.h + params.batchsize * 1.h
 
     input:
-    tuple val(ids), path(reads)
+    tuple val(batch), val(ids), path(reads)
 
     output:
     path("*.k2")
@@ -105,22 +115,22 @@ process kraken_single {
     import os
     from subprocess import run
 
-    ids = "${ids}".split()
+    ids = "${ids.join(' ')}".split()
     fwd = "${reads}".split()
 
     assert len(ids) == len(fwd)
-    assert len(ids) == len(rev)
 
     for i, idx in enumerate(ids):
         args = [
-            "kraken2", "${params.db}", "--paired",
+            "kraken2", "--db", "${params.db}", "--paired",
             "--confidence", "${params.confidence}",
-            "--therads", "${task.cpus}", "--gzip-compressed",
+            "--threads", "${task.cpus}", "--gzip-compressed",
             "--output", f"{idx}.k2", "--memory-mapping", fwd[i]
         ]
         res = run(args)
         if res.returncode != 0:
-            os.remove(f"{idx}.k2")
+            if os.path.exists(f"{idx}.k2"):
+                os.remove(f"{idx}.k2")
             sys.exit(res.returncode)
     """
 }
@@ -128,6 +138,7 @@ process kraken_single {
 process architeuthis_filter {
     cpus 1
     publishDir "${params.out_dir}/kraken2", overwrite: true
+    time 1.h
 
     input:
     tuple val(id), path(k2)
@@ -148,6 +159,7 @@ process kraken_report {
     cpus 1
     memory "4 GB"
     publishDir "${params.out_dir}/kraken2", overwrite: true
+    time 30.m
 
     input:
     tuple val(id), path(k2)
@@ -163,6 +175,7 @@ process kraken_report {
 process summarize_mappings {
     cpus 1
     publishDir "${params.out_dir}/architeuthis"
+    time 1.h
 
     input:
     tuple val(id), path(k2), path(report)
@@ -178,6 +191,7 @@ process summarize_mappings {
 process merge_mappings {
     cpus 1
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 1.h
 
     input:
     path(mappings)
@@ -194,6 +208,7 @@ process count_taxa {
     cpus 4
     memory "16 GB"
     publishDir "${params.out_dir}/bracken", overwrite: true
+    time 1.h
 
     input:
     tuple val(id), path(report), val(lev)
@@ -214,6 +229,7 @@ process quantify {
     cpus 1
     memory "16 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 2.h
 
     input:
     path(files)
@@ -229,6 +245,7 @@ process quantify {
 process merge_taxonomy {
     cpus 1
     memory "8 GB"
+    time 2.h
 
     input:
     tuple val(lev), path(reports)
@@ -245,6 +262,7 @@ process add_lineage {
     cpus 1
     memory "16 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 2.h
 
     input:
     tuple val(lev), path(merged)
@@ -259,7 +277,10 @@ process add_lineage {
 
 
 process multiqc {
+    cpus 1
+    memory "16 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 2.h
 
     input:
     path(report)
@@ -303,11 +324,16 @@ workflow {
             ])
             .ifEmpty { error "Cannot find any read files in ${params.data_dir}/raw!" }
             .set{raw}
-        n = file("*.f*.gz").size() / 2
+        n = file("${params.data_dir}/raw/*.f*.gz").size() / 2
     }
 
-    // download taxa dbs
-    //download_taxa_dbs()
+    // Calculate db memory requirement
+    if (params.dbmem) {
+        db_size = MemoryUnit.of("${params.dbmem} GB")
+    } else {
+        db_size = MemoryUnit.of(file("${params.db}/hash.k2d").size())
+        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
+    }
 
     // quality filtering
     preprocess(raw)
