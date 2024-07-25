@@ -218,7 +218,7 @@ process count_taxa {
 
     """
     mkdir ${lev} && \
-        sed 's/\\tR1\\t/\\tD\\t/g' ${report} > ${lev}/${report} && \
+        fixk2report.R ${report} ${lev}/${report} && \
         bracken -d ${params.db} -i ${lev}/${report} \
         -l ${lev} -o ${lev}/${lev}_${id}.b2 -r ${params.read_length} \
         -t ${params.threshold} -w ${lev}/${id}_bracken.tsv
@@ -331,7 +331,7 @@ workflow {
     if (params.dbmem) {
         db_size = MemoryUnit.of("${params.dbmem} GB")
     } else {
-        db_size = MemoryUnit.of(file("${params.db}/hash.k2d").size())
+        db_size = MemoryUnit.of(file("${params.db}/hash.k2d").size()) + 6.GB
         log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
     }
 
@@ -347,7 +347,7 @@ workflow {
         k2 = kraken_paired(batched)
     }
 
-    architeuthis_filter(k2) | kraken_report
+    k2.flatten().map{tuple it.baseName.split(".k2")[0], it} | architeuthis_filter | kraken_report
     count_taxa(kraken_report.out.combine(levels))
     count_taxa.out.map{s -> tuple(s[1], s[2])}
         .groupTuple()
