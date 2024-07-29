@@ -42,7 +42,9 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
     if (db == "genbank") {
         flog.info("Querying the assembly database for taxon %s...", taxid)
         tids <- gb_taxa[as.character(taxid), orig_taxid]
-        if (all(is.na(tids))) return(NULL)
+        if (all(is.na(tids))) {
+            return(NULL)
+        }
         matches <- gb_summary[tids] %>% genbank_quality()
         # If we have a complete genome we use the most recent one
         if (matches[, max(score)] > 1) {
@@ -55,18 +57,19 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
     } else {
         r <- rate
         for (i in 0:7) {
-            Sys.sleep(1/rate + 2^i)
+            Sys.sleep(1 / rate + 2^i)
             tids <- as.character(taxid)
             flog.info("Querying the nt database for taxon %s...", taxid)
             ret <- suppressMessages(esearch(
                 sprintf(NT_SEARCH, as.character(taxid)),
                 retmax = 500,
                 sort = "SLEN",
-                db = "nuccore"))
+                db = "nuccore"
+            ))
             if (ret$no_errors() || not_found(ret)) {
                 break
             }
-            if (i==7) {
+            if (i == 7) {
                 flog.info("Querying failed for %s. Aborting.", taxid)
                 stop()
             }
@@ -74,39 +77,46 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         uids <- ret %>% uid()
         uids <- uids[!is.na(uids)]
     }
-    if (length(uids) == 0) return(NULL)
+    if (length(uids) == 0) {
+        return(NULL)
+    }
     return(data.table(id = uids, db = db, matched_taxid = taxid, url = url))
 }
 
 ordered_match <- function(
     query, taxa, summary, db = "genbank", rank = "species") {
-
     coln <- paste0(rank, "_taxid")
     flog.info("Searching with rank `%s` in `%s`...", rank, db)
     query[["group"]] <- query[[coln]]
     taxa[["group"]] <- taxa[[coln]]
     taxa[, "group" := as.character(group)]
     setkey(taxa, "group")
-    if (nrow(query) == 0) return(NULL)
+    if (nrow(query) == 0) {
+        return(NULL)
+    }
     good <- query[, !is.na(group) & group != ""]
     hits <- query[
         good,
         find_taxon(group[1], taxa, summary, coln, db),
         by = "orig_taxid"
     ]
-    if (nrow(hits) == 0) return(NULL)
+    if (nrow(hits) == 0) {
+        return(NULL)
+    }
     hits[["rank"]] <- rank
 
     return(hits)
 }
 
-RANKS = c("kingdom", "phylum", "class", "order", "family", "genus", "species")
+RANKS <- c("kingdom", "phylum", "class", "order", "family", "genus", "species")
 args <- commandArgs(trailingOnly = TRUE)
 
-taxids <- fread(args[1], sep="\t",
-    col.names = c("orig_taxid", "source", "lineage", "names", "taxids"))
+taxids <- fread(args[1],
+    sep = "\t",
+    col.names = c("orig_taxid", "source", "lineage", "names", "taxids")
+)
 
-gbs <- fread(args[2], sep="\t")
+gbs <- fread(args[2], sep = "\t")
 # Some assemblies seem to have new existing release in never Genbank versions.
 # Only keep the ones actually available.
 gbs <- gbs[grepl("ftp.ncbi.nlm.nih.gov", ftp_path, fixed = TRUE)]
@@ -128,14 +138,16 @@ flog.info(
 )
 matches <- NULL
 for (i in 1:nrow(trials)) {
-    rank = trials[i, rank]
-    db = trials[i, db]
+    rank <- trials[i, rank]
+    db <- trials[i, db]
     queries <- food[!orig_taxid %in% matches$orig_taxid]
     m <- ordered_match(queries, gb_taxa, gbs, db = db, rank = rank)
     matches <- rbind(matches, m, fill = TRUE, use.names = TRUE)
 }
 matches <- unique(food[, c("orig_taxid", RANKS), with = FALSE])[
-    matches, on="orig_taxid"]
+    matches,
+    on = "orig_taxid"
+]
 fwrite(matches, "matches.csv")
 
 flog.info(
