@@ -139,6 +139,7 @@ process architeuthis_filter {
     cpus 1
     publishDir "${params.out_dir}/kraken2", overwrite: true
     time 1.h
+    memory "2 GB"
 
     input:
     tuple val(id), path(k2)
@@ -157,7 +158,7 @@ process architeuthis_filter {
 
 process kraken_report {
     cpus 1
-    memory "4 GB"
+    memory "200 MB"
     publishDir "${params.out_dir}/kraken2", overwrite: true
     time 30.m
 
@@ -206,7 +207,7 @@ process merge_mappings {
 
 process count_taxa {
     cpus 4
-    memory "16 GB"
+    memory "200 MB"
     publishDir "${params.out_dir}/bracken", overwrite: true
     time 1.h
 
@@ -227,7 +228,7 @@ process count_taxa {
 
 process quantify {
     cpus 1
-    memory "16 GB"
+    memory "2 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
     time 2.h
 
@@ -244,7 +245,7 @@ process quantify {
 
 process merge_taxonomy {
     cpus 1
-    memory "8 GB"
+    memory "1 GB"
     time 2.h
 
     input:
@@ -260,7 +261,7 @@ process merge_taxonomy {
 
 process add_lineage {
     cpus 1
-    memory "16 GB"
+    memory "4 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
     time 2.h
 
@@ -278,7 +279,7 @@ process add_lineage {
 
 process multiqc {
     cpus 1
-    memory "16 GB"
+    memory "2 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
     time 2.h
 
