@@ -42,7 +42,7 @@ energy <- function(ab) {
     )
     amounts["protein"] <- 4 * ab[compound_id == 2, mean(standard_content, na.rm=T) / 1000 ]
     amounts["carbs"] <- 4 * ab[compound_id == 3, mean(standard_content, na.rm=T) / 1000 ]
-    if (sum(is.finite(amounts)) < 3) {
+    if (sum(!is.na(amounts)) < 3) {
         kcal <- NA
     } else {
         kcal <- sum(amounts)
