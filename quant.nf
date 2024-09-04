@@ -24,7 +24,7 @@ Channel
 
 process preprocess {
     cpus 4
-    memory "4 GB"
+    memory "6 GB"
     publishDir "${params.out_dir}/preprocessed"
     time "1h"
 
@@ -122,7 +122,7 @@ process kraken_single {
 
     for i, idx in enumerate(ids):
         args = [
-            "kraken2", "--db", "${params.db}", "--paired",
+            "kraken2", "--db", "${params.db}",
             "--confidence", "${params.confidence}",
             "--threads", "${task.cpus}", "--gzip-compressed",
             "--output", f"{idx}.k2", "--memory-mapping", fwd[i]
