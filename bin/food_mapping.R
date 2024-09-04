@@ -33,6 +33,31 @@ scales <- c(
     `IU/100g` = 1
 )
 
+energy <- function(ab) {
+    # 1 - Fat, 2 - Proteins, 3 - Carbs, 4 - Fatty acids
+    amounts <- c()
+    amounts["fat"] <- 9 * max(
+        ab[compound_id == 1, mean(standard_content) / 1000 ],
+        ab[compound_id == 4, mean(standard_content) / 1000 ]
+    )
+    amounts["protein"] <- 4 * ab[compound_id == 2, mean(standard_content) / 1000 ]
+    amounts["carbs"] <- 4 * ab[compound_id == 3, mean(standard_content) / 1000 ]
+    if (length(amounts) == 0) {
+        kcal <- NA
+    } else {
+        kcal <- sum(amounts)
+    }
+    res <- data.table(
+        compound_id = 200000,
+        orig_unit = "kcal/100g",
+        source_type = "Nutrient",
+        standard_content = kcal,
+        orig_content = kcal,
+        orig_min = kcal,
+        orig_max = kcal
+    )
+}
+
 food <- fread(file.path(args[1], "Food.csv"))
 content <- fread(file.path(args[1], "Content.csv"))
 compounds <- fread(file.path(args[1], "Compound.csv"))
@@ -48,20 +73,35 @@ content <- content[!is.na(standard_content), .(
     compound_id = source_id, food_id, orig_content, orig_min, orig_max,
     orig_unit, standard_content, preparation_type, source_type
 )]
+
+# Add calculated energy
+energies <- content[, energy(.SD), by=c("food_id", "preparation_type")]
+content <- rbind(content, energies, fill=TRUE)
+
 unit_map <- content[, unique(orig_unit) |> sapply(clean_unit)]
 content[, "unit" := unit_map[orig_unit]]
 content[, "scale" := scales[unit]]
 content[, standard_content := standard_content * scale]
 content[scale != 1, unit := "mg/100g"]
+
 compounds <- compounds[, .(
     compound_id = id, name, description = annotation_quality,
-    CAS = description, mono_mass = moldb_inchi, kingdom = kingdom,
-    superclass = superklass, class = klass, subclass = subklass,
+    CAS = description, mono_mass = moldb_inchi, compound_kingdom = kingdom,
+    compound_superclass = superklass, comound_class = klass, compound_subclass = subklass,
     source_type = "Compound"
 )]
 nutrients <- nutrients[, .(
     compound_id = id, name, description, source_type = "Nutrient"
 )]
+nutrients <- rbind(
+    nutrients,
+    data.table(
+        compound_id = 200000,
+        name = "Energy (calculated)",
+        source_type = "Nutrient",
+        description = "Energy content calculated from mean macronutrients amounts."
+    )
+)
 compounds <- rbind(compounds, nutrients, use.names = TRUE, fill = TRUE)
 food_matches <- food[
     matched, on = c(ncbi_taxonomy_id = "orig_taxid"), nomatch = 0]
@@ -69,8 +109,26 @@ fwrite(food_matches, "food_matches.csv")
 food_matches <- content[food_matches, on = "food_id", nomatch = 0]
 food_matches <- compounds[
     food_matches, on = c("compound_id", "source_type"), nomatch = 0]
+
+# remove too high calory values
+food_matches <- food_matches[!(unit == "kcal/100g" & orig_content > 900)]
+# Correct the calories for which the standard_content contains incorrect values,
+# but orig_content seems to be correct
+food_matches[unit == "kcal/100g", standard_content := orig_content]
+
+# Correct incorrect cholesterol units.
+# There are two clear peaks in the histogram with one peak > 1000mg/100g
+#  (probably ug -> mg error in FooDB)
+food_matches[
+    unit == "mg/100g" & name == "Cholesterol" & standard_content > 1000,
+    standard_content := standard_content / 1000.0
+]
+
+# Only keep kcal for energy
+# and remove obviously incorrect entries like 200g nutrient/100g food
 food_matches <- food_matches[
     !(name == "Energy" & unit != "kcal/100g")][
     !(unit == "mg/100g" & standard_content > 100000)
     ]
+
 fwrite(food_matches, "food_contents.csv.gz")
