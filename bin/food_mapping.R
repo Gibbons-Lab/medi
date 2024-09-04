@@ -37,15 +37,15 @@ energy <- function(ab) {
     # 1 - Fat, 2 - Proteins, 3 - Carbs, 4 - Fatty acids
     amounts <- c()
     amounts["fat"] <- 9 * max(
-        ab[compound_id == 1, mean(standard_content) / 1000 ],
-        ab[compound_id == 4, mean(standard_content) / 1000 ]
+        ab[compound_id == 1, mean(standard_content, na.rm=T) / 1000 ],
+        ab[compound_id == 4, mean(standard_content, na.rm=T) / 1000 ]
     )
-    amounts["protein"] <- 4 * ab[compound_id == 2, mean(standard_content) / 1000 ]
-    amounts["carbs"] <- 4 * ab[compound_id == 3, mean(standard_content) / 1000 ]
+    amounts["protein"] <- 4 * ab[compound_id == 2, mean(standard_content, na.rm=T) / 1000 ]
+    amounts["carbs"] <- 4 * ab[compound_id == 3, mean(standard_content, na.rm=T) / 1000 ]
     if (length(amounts) == 0) {
         kcal <- NA
     } else {
-        kcal <- sum(amounts)
+        kcal <- sum(amounts, na.rm=T)
     }
     res <- data.table(
         compound_id = 200000,
