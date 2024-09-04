@@ -45,7 +45,7 @@ energy <- function(ab) {
     if (length(amounts) < 3) {
         kcal <- NA
     } else {
-        kcal <- sum(amounts, na.rm=T)
+        kcal <- sum(amounts)
     }
     res <- data.table(
         compound_id = 200000,
