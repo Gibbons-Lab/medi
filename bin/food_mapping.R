@@ -9,6 +9,7 @@ clean_unit <- function(x) {
     x <- gsub("/ ", "/", x)
     x <- gsub(" g", "g", x)
     x <- gsub("\\s\\w{2,}.+", "", x)
+    return(x)
 }
 
 scales <- c(

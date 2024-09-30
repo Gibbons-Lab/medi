@@ -207,7 +207,7 @@ process merge_mappings {
 
 process count_taxa {
     cpus 4
-    memory "200 MB"
+    memory "640 MB"
     publishDir "${params.out_dir}/bracken", overwrite: true
     time 1.h
 
