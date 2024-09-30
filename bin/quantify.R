@@ -68,6 +68,9 @@ contents[, "reps" := .N, by = c("sample_id", "matched_taxid", "compound_id", "so
 contents[, "relative_food_abundance" := reads / sum(reads[!duplicated(matched_taxid)], na.rm = T), by="sample_id"]
 food_content <- contents[, .(
     abundance = sum(relative_food_abundance * standard_content / reps),
+    abundance_sd = sum(relative_food_abundance * sd(standard_content)),
+    abundance_min = sum(relative_food_abundance * min(standard_content)),
+    abundance_max = sum(relative_food_abundance * max(standard_content)),
     name = name[1],
     monomer_mass = mono_mass[1],
     kingdom = kingdom[1],
@@ -78,7 +81,7 @@ food_content <- contents[, .(
     ),
     by = c("sample_id", "compound_id", "source_type", "unit")
 ]
-food_content[unit == "mg/100g", "relative_abundance" := abundance / sum(abundance), by = c("source_type", "sample_id")]
+
 empty_content <- data.table(sample_id = missing)
 food_content <- rbind(food_content, empty_content, fill=TRUE)
 

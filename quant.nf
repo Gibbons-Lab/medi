@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 params.out_dir = "${launchDir}/data"
 params.data_dir = "${launchDir}/data"
-params.db = "data/medi_db"
+params.db = "${launchDir}/data/medi_db"
 params.foods = "${params.db}/food_matches.csv"
 params.food_contents = "${params.db}/food_contents.csv.gz"
 params.single_end = false
@@ -12,6 +12,11 @@ params.read_length = 150
 params.threshold = 10
 params.confidence = 0.3
 params.mapping = false
+params.batchsize = 50
+params.maxcpus = 24
+params.dbmem = null
+
+def db_size = null
 
 Channel
     .fromList(["D", "G", "S"])
@@ -19,8 +24,9 @@ Channel
 
 process preprocess {
     cpus 4
-    memory "8 GB"
+    memory "6 GB"
     publishDir "${params.out_dir}/preprocessed"
+    time "1h"
 
     input:
     tuple val(id), path(reads)
@@ -50,42 +56,96 @@ process preprocess {
         """
 }
 
-process kraken {
-    cpus 8
+process kraken_paired {
+    cpus params.maxcpus
+    memory db_size
+    time 2.h + params.batchsize * 0.5.h
 
     input:
-    tuple val(id), path(reads), path(json), path(html)
+    tuple val(batch), val(ids), path(fwd_reads), path(rev_reads)
 
     output:
-    tuple val(id), path("${id}.k2"), path("${id}.tsv")
+    path("*.k2")
 
-    script:
-    if (params.single_end)
-        """
-        kraken2 --db ${params.db} \
-            --confidence ${params.confidence} \
-            --threads ${task.cpus} --gzip-compressed --output ${id}.k2 \
-            --memory-mapping --report ${id}.tsv ${reads}
-        """
+    """
+    #!/usr/bin/env python
 
-    else
-        """
-        kraken2 --db ${params.db} --paired \
-            --confidence ${params.confidence} \
-            --threads ${task.cpus} --gzip-compressed --output ${id}.k2 \
-            --memory-mapping --report ${id}.tsv  ${reads[0]} ${reads[1]}
-        """
+    import sys
+    import os
+    from subprocess import run
+
+    ids = "${ids.join(' ')}".split()
+    fwd = "${fwd_reads}".split()
+    rev = "${rev_reads}".split()
+
+    assert len(ids) == len(fwd)
+    assert len(ids) == len(rev)
+
+    for i, idx in enumerate(ids):
+        args = [
+            "kraken2", "--db", "${params.db}", "--paired",
+            "--confidence", "${params.confidence}",
+            "--threads", "${task.cpus}", "--gzip-compressed",
+            "--output", f"{idx}.k2", "--memory-mapping",
+            fwd[i], rev[i]
+        ]
+        res = run(args)
+        if res.returncode != 0:
+            if os.path.exists(f"{idx}.k2"):
+                os.remove(f"{idx}.k2")
+            sys.exit(res.returncode)
+    """
+}
+
+process kraken_single {
+    cpus params.maxcpus
+    memory db_size
+    time 2.h + params.batchsize * 1.h
+
+    input:
+    tuple val(batch), val(ids), path(reads)
+
+    output:
+    path("*.k2")
+
+    """
+    #!/usr/bin/env python
+
+    import sys
+    import os
+    from subprocess import run
+
+    ids = "${ids.join(' ')}".split()
+    fwd = "${reads}".split()
+
+    assert len(ids) == len(fwd)
+
+    for i, idx in enumerate(ids):
+        args = [
+            "kraken2", "--db", "${params.db}",
+            "--confidence", "${params.confidence}",
+            "--threads", "${task.cpus}", "--gzip-compressed",
+            "--output", f"{idx}.k2", "--memory-mapping", fwd[i]
+        ]
+        res = run(args)
+        if res.returncode != 0:
+            if os.path.exists(f"{idx}.k2"):
+                os.remove(f"{idx}.k2")
+            sys.exit(res.returncode)
+    """
 }
 
 process architeuthis_filter {
     cpus 1
     publishDir "${params.out_dir}/kraken2", overwrite: true
+    time 1.h
+    memory "2 GB"
 
     input:
-    tuple val(id), path(k2), path(report)
+    tuple val(id), path(k2)
 
     output:
-    tuple val(id), path("${id}_filtered.k2"), path(report)
+    tuple val(id), path("${id}_filtered.k2")
 
     """
     architeuthis mapping filter ${k2} \
@@ -94,13 +154,29 @@ process architeuthis_filter {
         --max-multiplicity 4 \
         --out ${id}_filtered.k2
     """
+}
 
+process kraken_report {
+    cpus 1
+    memory "200 MB"
+    publishDir "${params.out_dir}/kraken2", overwrite: true
+    time 30.m
 
+    input:
+    tuple val(id), path(k2)
+
+    output:
+    tuple val(id), path("*.tsv")
+
+    """
+    kraken2-report ${params.db}/taxo.k2d ${k2} ${id}.tsv
+    """
 }
 
 process summarize_mappings {
     cpus 1
     publishDir "${params.out_dir}/architeuthis"
+    time 1.h
 
     input:
     tuple val(id), path(k2), path(report)
@@ -116,6 +192,7 @@ process summarize_mappings {
 process merge_mappings {
     cpus 1
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 1.h
 
     input:
     path(mappings)
@@ -130,18 +207,19 @@ process merge_mappings {
 
 process count_taxa {
     cpus 4
-    memory "16 GB"
+    memory "640 MB"
     publishDir "${params.out_dir}/bracken", overwrite: true
+    time 1.h
 
     input:
-    tuple val(id), path(kraken), path(report), val(lev)
+    tuple val(id), path(report), val(lev)
 
     output:
     tuple val(id), val(lev), path("${lev}/${lev}_${id}.b2")
 
     """
     mkdir ${lev} && \
-        sed 's/\\tR1\\t/\\tD\\t/g' ${report} > ${lev}/${report} && \
+        fixk2report.R ${report} ${lev}/${report} && \
         bracken -d ${params.db} -i ${lev}/${report} \
         -l ${lev} -o ${lev}/${lev}_${id}.b2 -r ${params.read_length} \
         -t ${params.threshold} -w ${lev}/${id}_bracken.tsv
@@ -150,8 +228,9 @@ process count_taxa {
 
 process quantify {
     cpus 1
-    memory "16 GB"
+    memory "2 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 2.h
 
     input:
     path(files)
@@ -166,7 +245,8 @@ process quantify {
 
 process merge_taxonomy {
     cpus 1
-    memory "8 GB"
+    memory "1 GB"
+    time 2.h
 
     input:
     tuple val(lev), path(reports)
@@ -181,8 +261,9 @@ process merge_taxonomy {
 
 process add_lineage {
     cpus 1
-    memory "16 GB"
+    memory "4 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 2.h
 
     input:
     tuple val(lev), path(merged)
@@ -197,7 +278,10 @@ process add_lineage {
 
 
 process multiqc {
+    cpus 1
+    memory "2 GB"
     publishDir "${params.out_dir}", mode: "copy", overwrite: true
+    time 2.h
 
     input:
     path(report)
@@ -210,6 +294,20 @@ process multiqc {
     """
 }
 
+def batchify(ch, n, paired = true, batchsize = 10) {
+    idx = Channel
+        .from(0..(n-1))
+        .map{it.intdiv(batchsize)}
+    if (paired) {
+        batched = idx.merge(ch)
+            .map{tuple(it[0], it[1], it[2][0], it[2][1])}
+            .groupTuple()
+    } else {
+        batched = idx.merge(ch).groupTuple()
+    }
+    return batched
+}
+
 workflow {
     // find files
     if (params.single_end) {
@@ -217,6 +315,7 @@ workflow {
             .fromPath("${params.data_dir}/raw/*.fastq.gz")
             .map{row -> tuple(row.baseName.split("\\.fastq")[0], tuple(row))}
             .set{raw}
+        n = file("${params.data_dir}/raw/*.fastq.gz").size()
     } else {
         Channel
             .fromFilePairs([
@@ -226,18 +325,31 @@ workflow {
             ])
             .ifEmpty { error "Cannot find any read files in ${params.data_dir}/raw!" }
             .set{raw}
+        n = file("${params.data_dir}/raw/*.f*.gz").size() / 2
     }
 
-    // download taxa dbs
-    //download_taxa_dbs()
+    // Calculate db memory requirement
+    if (params.dbmem) {
+        db_size = MemoryUnit.of("${params.dbmem} GB")
+    } else {
+        db_size = MemoryUnit.of(file("${params.db}/hash.k2d").size()) + 6.GB
+        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
+    }
 
     // quality filtering
     preprocess(raw)
 
+
     // quantify taxa abundances
-    kraken(preprocess.out)
-    architeuthis_filter(kraken.out)
-    count_taxa(architeuthis_filter.out.combine(levels))
+    batched = batchify(preprocess.out, n, !params.single_end, params.batchsize)
+    if (params.single_end) {
+        k2 = kraken_single(batched)
+    } else {
+        k2 = kraken_paired(batched)
+    }
+
+    k2.flatten().map{tuple it.baseName.split(".k2")[0], it} | architeuthis_filter | kraken_report
+    count_taxa(kraken_report.out.combine(levels))
     count_taxa.out.map{s -> tuple(s[1], s[2])}
         .groupTuple()
         .set{merge_groups}
