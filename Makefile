@@ -1,8 +1,8 @@
-K2DIR := $(shell mktemp -d -t kraken2_XXX)
+K2DIR := "src/kraken2"
 SRC := ${K2DIR}/src
 
 repo:
-	echo ${K2DIR}
+	rm -rf ${K2DIR}
 	git clone https://github.com/daydream-boost/kraken2 ${K2DIR}
 
 report: repo
