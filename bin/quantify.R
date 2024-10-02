@@ -58,7 +58,6 @@ empty <- lapply(
         human_reads = info[sid, human_reads]
     )
 )
-summary(sapply(empty, nrow)) |> print()
 food_quant <- rbind(food_quant, rbindlist(empty), fill=TRUE)
 
 fwrite(food_quant, "food_abundance.csv")
@@ -73,10 +72,10 @@ food_content <- contents[, .(
     abundance_max = sum(relative_food_abundance * max(standard_content)),
     name = name[1],
     monomer_mass = mono_mass[1],
-    kingdom = kingdom[1],
-    superclass = superclass[1],
-    class = class[1],
-    subclass = subclass[1],
+    kingdom = compound_kingdom[1],
+    superclass = compound_superclass[1],
+    class = comound_class[1],
+    subclass = compound_subclass[1],
     CAS = CAS[1]
     ),
     by = c("sample_id", "compound_id", "source_type", "unit")
