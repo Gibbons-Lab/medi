@@ -10,7 +10,7 @@ dependencies:
   - kraken2==2.1.3
   - bracken==2.6.0
   - prodigal
-  - multiqc
+  - multiqc<=1.16.0
   - biopython
   - sourmash
   - pandas
