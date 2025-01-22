@@ -167,6 +167,16 @@ Where `/path/to/medi_db/` should be the output directory from step (3). Usually 
 > massive performance benefits from memory-mapping. [See here](docs/concepts.md) for
 > more info. For single machines we recommend `--batchsize 1`
 
+### Output files
+
+Those are all found in the output directory, usually `data/` if not specified otherwise.
+
+| filename           | description                                          |
+| --------------     | -----------------------------------------------------|
+| food_abundance.csv | Food abundances for each sample in the data set. Samples with only NA entries had no detected food reads. |
+| food_content.csv   | Estimates for nutrient and compound abundances normalized to a representative portion of 100g. |
+| multiqc_report.html | Quality control metrics for the sequencing data. |
+
 ### Bonus: Getting microbial abundances
 
 By default MEDI also reports bacteria, archaea, and host abundances with the same
