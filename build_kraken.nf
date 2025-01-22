@@ -2,12 +2,32 @@
 
 nextflow.enable.dsl = 2
 
-params.additional_dbs = ["bacteria", "archaea", "human", "viral", "plasmid", "UniVec_Core"]
-params.max_db_size = 500
+params.additionalDbs = ["bacteria", "archaea", "human", "viral", "plasmid", "UniVec_Core"]
+params.maxDbSize = 500
 params.confidence = 0.3
-params.max_threads = 20
+params.threads = 20
 params.rebuild = false
-params.db = "${launchDir}/data/medi_db"
+params.downloads = "${launchDir}/data"
+params.out = "${launchDir}/data"
+params.db = "${params.out}/medi_db"
+
+
+workflow {
+    if (!params.rebuild) {
+        Channel.fromPath("${params.downloads}/sequences/*.fna.gz").set{food_sequences}
+        setup_kraken_db()
+        add_existing(setup_kraken_db.out, params.additionalDbs)
+        add_sequences(food_sequences, add_existing.out.last())
+        db = add_sequences.out.last()
+    } else {
+        db = Channel.fromPath(params.db)
+    }
+
+    build_kraken_db(db)
+    self_classify(build_kraken_db.out)
+    build_bracken(self_classify.out) | add_info
+}
+
 
 process setup_kraken_db {
     cpus 1
@@ -16,6 +36,7 @@ process setup_kraken_db {
     output:
     path("medi_db")
 
+    script:
     """
     kraken2-build --download-taxonomy --db medi_db
     """
@@ -24,7 +45,7 @@ process setup_kraken_db {
 process add_sequences {
     cpus 5
     memory "16 GB"
-    publishDir "$baseDir/data"
+    publishDir params.out
 
     input:
     path(fasta)
@@ -33,6 +54,7 @@ process add_sequences {
     output:
     path("$db")
 
+    script:
     """
     gunzip -c $fasta > ${fasta.baseName} && \
     kraken2-build --add-to-library ${fasta.baseName} --db $db --threads ${task.cpus} && \
@@ -63,8 +85,8 @@ process add_existing {
 }
 
 process build_kraken_db {
-    cpus params.max_threads
-    memory "${params.max_db_size} GB"
+    cpus params.threads
+    memory "${params.maxDbSize} GB"
 
     input:
     path(db)
@@ -72,6 +94,7 @@ process build_kraken_db {
     output:
     path("$db")
 
+    script:
     """
     kraken2-build --build --db $db \
         --threads ${task.cpus} \
@@ -82,7 +105,7 @@ process build_kraken_db {
 
 process self_classify {
     cpus 1
-    memory "${params.max_db_size} GB"
+    memory "${params.maxDbSize} GB"
 
     input:
     path(db)
@@ -90,6 +113,7 @@ process self_classify {
     output:
     path(db)
 
+    script:
     """
     kraken2 --db ${db} --threads ${task.cpus} \
         --confidence ${params.confidence} \
@@ -101,7 +125,7 @@ process self_classify {
 process build_bracken {
     cpus 20
     memory "64 GB"
-    publishDir "$baseDir/data"
+    publishDir params.out
 
     input:
     path(db)
@@ -109,6 +133,7 @@ process build_bracken {
     output:
     path("$db")
 
+    script:
     """
     bracken-build -d $db -t ${task.cpus} -k 35 -l 100 && \
     bracken-build -d $db -t ${task.cpus} -k 35 -l 150
@@ -125,15 +150,16 @@ process library {
     output:
     path("$db/library/*/*.f*a")
 
+    script:
     """
     ls ${db}/library/*/*.f*a | wc -l
     """
 }
 
-process add_food_info {
+process add_info {
     cpus 1
     memory "1 GB"
-    publishDir "$baseDir/data"
+    publishDir params.out
 
     input:
     path(db)
@@ -141,23 +167,9 @@ process add_food_info {
     output:
     path("$db")
 
+    script:
     """
-    cp ${launchDir}/data/dbs/{food_matches.csv,food_contents.csv.gz} ${db}
+    cp ${params.downloads}/dbs/{food_matches.csv,food_contents.csv.gz} ${db}
+    cp ${params.downloads}/manifest.csv ${db}
     """
-}
-
-workflow {
-    if (!params.rebuild) {
-        Channel.fromPath("${baseDir}/data/sequences/*.fna.gz").set{food_sequences}
-        setup_kraken_db()
-        add_existing(setup_kraken_db.out, params.additional_dbs)
-        add_sequences(food_sequences, add_existing.out.last())
-        db = add_sequences.out.last()
-    } else {
-        db = Channel.fromPath(params.db)
-    }
-
-    build_kraken_db(db)
-    self_classify(build_kraken_db.out)
-    build_bracken(self_classify.out) | add_food_info
 }

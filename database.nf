@@ -1,28 +1,48 @@
 #!/usr/bin/env nextflow
 
-// Build the FOODB genome database
-
-params.max_threads = 20
-
 nextflow.enable.dsl = 2
 
-foodb = "https://foodb.ca/public/system/downloads/foodb_2020_4_7_csv.tar.gz"
-genbank_summary = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
-taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
+params.threads = 20
+params.out = "${launchDir}/data"
+
+workflow {
+    def foodb = "https://foodb.ca/public/system/downloads/foodb_2020_4_7_csv.tar.gz"
+    def genbank_summary = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
+    def taxdump = "ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
+
+    download(foodb, genbank_summary) | get_taxids
+    download_taxa_dbs(taxdump)
+    get_lineage(get_taxids.out.combine(download_taxa_dbs.out))
+        | match_taxids
+        | download_sequences
+
+    download_sequences.out.map{it[0]}.flatten().set{seqs}
+
+
+    seqs | sketch
+    ANI(sketch.out.collect())
+
+    food_mappings(match_taxids.out)
+}
 
 
 process download {
     cpus 1
-    publishDir "$baseDir/data/dbs"
+    publishDir "${params.out}/dbs"
+
+    input:
+    val foodb
+    val genbank_summary
 
     output:
     tuple path("foodb"), path("genbank_summary.tsv")
 
+    script:
     """
-    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 $foodb -O foodb.tgz && \
-    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 $genbank_summary -O genbank_summary.tsv && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${foodb} -O foodb.tgz && \
+    wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 ${genbank_summary} -O genbank_summary.tsv && \
     tar -xf foodb.tgz && \
-    mv foodb_2020_04_07_csv foodb
+    mv foodb_*_csv foodb
     """
 }
 
@@ -35,6 +55,7 @@ process get_taxids {
     output:
     tuple path("foodb"), path("taxids.tsv"), path("${gb_summary}")
 
+    script:
     """
     #!/usr/bin/env Rscript
 
@@ -55,12 +76,16 @@ process get_taxids {
 process download_taxa_dbs {
     cpus 1
 
+    input:
+    val(taxdump)
+
     output:
     path("taxdump")
 
+    script:
     """
     wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 4 \
-        ftp://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz && \
+        ${taxdump} && \
         mkdir taxdump && tar -xf taxdump.tar.gz --directory taxdump
     """
 }
@@ -74,6 +99,7 @@ process get_lineage {
     output:
     tuple path("$foodb"), path("lineage.txt"), path("lineage_ids.txt"), path("${gb_summary}")
 
+    script:
     """
     taxonkit lineage --data-dir $taxadb -i 1 $taxids > raw.txt && \
     taxonkit reformat --data-dir $taxadb -i 3 raw.txt > lineage.txt && \
@@ -83,7 +109,7 @@ process get_lineage {
 
 process match_taxids {
     cpus 1
-    publishDir "$baseDir/data"
+    publishDir params.out
 
     input:
     tuple path(foodb), path(lineage), path(lineage_ids), path(gb_summary)
@@ -91,6 +117,7 @@ process match_taxids {
     output:
     path("matches.csv")
 
+    script:
     """
     match.R $lineage_ids $gb_summary
     """
@@ -100,7 +127,7 @@ process download_sequences {
     cpus 8
     memory "64 GB"
 
-    publishDir "$baseDir/data/"
+    publishDir params.out
 
     input:
     path(matches)
@@ -108,6 +135,7 @@ process download_sequences {
     output:
     tuple path("sequences/*.fna.gz"), path("manifest.csv")
 
+    script:
     """
     download.R $matches $task.cpus sequences
     """
@@ -117,7 +145,7 @@ process download_sequences {
 process food_mappings {
     cpus 1
     memory "64 GB"
-    publishDir "$baseDir/data/dbs"
+    publishDir "${params.out}/dbs"
 
     input:
     path(matches)
@@ -125,15 +153,16 @@ process food_mappings {
     output:
     tuple path("food_matches.csv"), path("food_contents.csv.gz")
 
+    script:
     """
-    food_mapping.R $baseDir/data/dbs/foodb $matches
+    food_mapping.R ${params.out}/dbs/foodb $matches
     """
 }
 
 process sketch {
     cpus 2
     memory "4 GB"
-    publishDir "${launchDir}/data/sketches"
+    publishDir "${params.out}/sketches"
 
     input:
     path(seq)
@@ -141,15 +170,16 @@ process sketch {
     output:
     path("*.sig")
 
+    script:
     """
     sourmash sketch dna -p k=21,k=31,k=51,scaled=1000 ${seq}
     """
 }
 
 process ANI {
-    cpus params.max_threads
+    cpus params.threads
     memory "64 GB"
-    publishDir "${launchDir}/data", mode: "copy", overwite: true
+    publishDir "${params.out}", mode: "copy", overwite: true
 
     input:
     path(sigs)
@@ -157,24 +187,8 @@ process ANI {
     output:
     path("mash_ani.csv")
 
+    script:
     """
     sourmash compare -k 21 --ani -p ${task.cpus} --csv mash_ani.csv ${sigs}
     """
-}
-
-
-workflow {
-    download() | get_taxids
-    download_taxa_dbs()
-    get_lineage(get_taxids.out.combine(download_taxa_dbs.out))
-        | match_taxids
-        | download_sequences
-
-    download_sequences.out.map{it[0]}.flatten().set{seqs}
-
-
-    seqs | sketch
-    ANI(sketch.out.collect())
-
-    food_mappings(match_taxids.out)
 }

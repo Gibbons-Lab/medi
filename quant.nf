@@ -12,15 +12,85 @@ params.read_length = 150
 params.threshold = 10
 params.confidence = 0.3
 params.mapping = false
-params.batchsize = 50
+params.batchsize = 400
 params.maxcpus = 24
 params.dbmem = null
 
-def db_size = null
+// Helper to calculate the required RAM for the Kraken2 database
+def estimate_db_size(hash) {
+    def db_size = null
 
-Channel
-    .fromList(["D", "G", "S"])
-    .set{levels}
+    // Calculate db memory requirement
+    if (params.dbmem) {
+        db_size = MemoryUnit.of("${params.dbmem} GB")
+    } else {
+        db_size = MemoryUnit.of(file(hash).size()) + 6.GB
+        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
+    }
+
+    return db_size
+}
+
+
+workflow {
+    Channel
+        .fromList(["D", "G", "S"])
+        .set{levels}
+
+    // find files
+    if (params.single_end) {
+        Channel
+            .fromPath("${params.data_dir}/raw/*.fastq.gz")
+            .map{row -> tuple(row.baseName.split("\\.fastq")[0], tuple(row))}
+            .set{raw}
+    } else {
+        Channel
+            .fromFilePairs([
+                "${params.data_dir}/raw/*_R{1,2}_001.fastq.gz",
+                "${params.data_dir}/raw/*_{1,2}.fastq.gz",
+                "${params.data_dir}/raw/*_R{1,2}.fastq.gz"
+            ])
+            .ifEmpty { error "Cannot find any read files in ${params.data_dir}/raw!" }
+            .set{raw}
+    }
+
+    // quality filtering
+    preprocess(raw)
+
+    // quantify taxa abundances
+    batched = preprocess.out    // buffer the samples into batches
+        .collate(params.batchsize)
+        .map{it -> tuple it.collect{a -> a[0]}, it.collect{a -> a[1]}.flatten()}
+    // run Kraken2 per batch
+    kraken(batched)
+
+    // filter Kraken2 results and generate reports
+    kraken.out
+        .flatten()
+        .map{tuple it.baseName.split(".k2")[0], it}
+        | architeuthis_filter | kraken_report
+    count_taxa(kraken_report.out.combine(levels))
+    count_taxa.out.map{s -> tuple(s[1], s[2])}
+        .groupTuple()
+        .set{merge_groups}
+    merge_taxonomy(merge_groups)
+
+    if (params.mapping) {
+        // Get individual mappings
+        summarize_mappings(architeuthis_filter.out)
+        summarize_mappings.out.collect() | merge_mappings
+    }
+
+    // Add taxon lineages
+    add_lineage(merge_taxonomy.out)
+
+    // Quantify foods
+    add_lineage.out.collect() | quantify
+
+    // quality overview
+    multiqc(merge_taxonomy.out.map{it[1]}.collect())
+}
+
 
 process preprocess {
     cpus 4
@@ -56,17 +126,20 @@ process preprocess {
         """
 }
 
-process kraken_paired {
-    cpus params.maxcpus
-    memory db_size
-    time 2.h + params.batchsize * 0.5.h
+process kraken {
+    cpus params.threads
+    memory { estimate_db_size("${params.db}/hash.k2d") }
+    time { 2.h + ids.size() * 0.5.h }
+    scratch false
+    publishDir "${params.data_dir}/kraken2"
 
     input:
-    tuple val(batch), val(ids), path(fwd_reads), path(rev_reads)
+    tuple val(ids), path(reads)
 
     output:
-    path("*.k2")
+    tuple path("*.k2"), path("*.tsv")
 
+    script:
     """
     #!/usr/bin/env python
 
@@ -74,59 +147,34 @@ process kraken_paired {
     import os
     from subprocess import run
 
-    ids = "${ids.join(' ')}".split()
-    fwd = "${fwd_reads}".split()
-    rev = "${rev_reads}".split()
-
-    assert len(ids) == len(fwd)
-    assert len(ids) == len(rev)
-
-    for i, idx in enumerate(ids):
-        args = [
-            "kraken2", "--db", "${params.db}", "--paired",
-            "--confidence", "${params.confidence}",
-            "--threads", "${task.cpus}", "--gzip-compressed",
-            "--output", f"{idx}.k2", "--memory-mapping",
-            fwd[i], rev[i]
-        ]
-        res = run(args)
-        if res.returncode != 0:
-            if os.path.exists(f"{idx}.k2"):
-                os.remove(f"{idx}.k2")
-            sys.exit(res.returncode)
-    """
-}
-
-process kraken_single {
-    cpus params.maxcpus
-    memory db_size
-    time 2.h + params.batchsize * 1.h
-
-    input:
-    tuple val(batch), val(ids), path(reads)
-
-    output:
-    path("*.k2")
-
-    """
-    #!/usr/bin/env python
-
-    import sys
-    import os
-    from subprocess import run
+    base_args = [
+        "kraken2", "--db", "${params.kraken2_db}",
+        "--confidence", "${params.confidence}",
+        "--threads", "${task.cpus}", "--gzip-compressed"
+    ]
 
     ids = "${ids.join(' ')}".split()
-    fwd = "${reads}".split()
+    reads = "${reads}".split()
+
+    se = ${params.single_end ? "True" : "False"}
+    if se:
+        fwd = reads
+    else:
+        fwd = reads[0::2]
+        rev = reads[1::2]
+        base_args += ["--paired"]
+        assert len(fwd) == len(rev)
 
     assert len(ids) == len(fwd)
 
     for i, idx in enumerate(ids):
-        args = [
-            "kraken2", "--db", "${params.db}",
-            "--confidence", "${params.confidence}",
-            "--threads", "${task.cpus}", "--gzip-compressed",
-            "--output", f"{idx}.k2", "--memory-mapping", fwd[i]
+        args = base_args + [
+            "--output", f"{idx}.k2",
+            "--report", f"{idx}.tsv",
+            "--memory-mapping", fwd[i]
         ]
+        if not se:
+            args.append(rev[i])
         res = run(args)
         if res.returncode != 0:
             if os.path.exists(f"{idx}.k2"):
@@ -147,6 +195,7 @@ process architeuthis_filter {
     output:
     tuple val(id), path("${id}_filtered.k2")
 
+    script:
     """
     architeuthis mapping filter ${k2} \
         --data-dir ${params.db}/taxonomy \
@@ -168,6 +217,7 @@ process kraken_report {
     output:
     tuple val(id), path("*.tsv")
 
+    script:
     """
     kraken2-report ${params.db}/taxo.k2d ${k2} ${id}.tsv
     """
@@ -184,6 +234,7 @@ process summarize_mappings {
     output:
     path("${id}_mapping.csv")
 
+    script:
     """
     architeuthis mapping summary ${k2} --data-dir ${params.db}/taxonomy --out ${id}_mapping.csv
     """
@@ -200,6 +251,7 @@ process merge_mappings {
     output:
     path("mappings.csv")
 
+    script:
     """
     architeuthis merge ${mappings} --out mappings.csv
     """
@@ -217,6 +269,7 @@ process count_taxa {
     output:
     tuple val(id), val(lev), path("${lev}/${lev}_${id}.b2")
 
+    script:
     """
     mkdir ${lev} && \
         fixk2report.R ${report} ${lev}/${report} && \
@@ -238,6 +291,7 @@ process quantify {
     output:
     tuple path("food_abundance.csv"), path("food_content.csv")
 
+    script:
     """
     quantify.R ${params.foods} ${params.food_contents} ${files}
     """
@@ -254,6 +308,7 @@ process merge_taxonomy {
     output:
     tuple val(lev), path("${lev}_merged.csv")
 
+    script:
     """
     architeuthis merge ${reports} --out ${lev}_merged.csv
     """
@@ -271,6 +326,7 @@ process add_lineage {
     output:
     path("${lev}_counts.csv")
 
+    script:
     """
     architeuthis lineage ${merged} --data-dir ${params.db}/taxonomy --out ${lev}_counts.csv
     """
@@ -289,84 +345,8 @@ process multiqc {
     output:
     path("multiqc_report.html")
 
+    script:
     """
     multiqc ${params.out_dir}/preprocessed ${params.out_dir}/kraken2
     """
-}
-
-def batchify(ch, n, paired = true, batchsize = 10) {
-    idx = Channel
-        .from(0..(n-1))
-        .map{it.intdiv(batchsize)}
-    if (paired) {
-        batched = idx.merge(ch)
-            .map{tuple(it[0], it[1], it[2][0], it[2][1])}
-            .groupTuple()
-    } else {
-        batched = idx.merge(ch).groupTuple()
-    }
-    return batched
-}
-
-workflow {
-    // find files
-    if (params.single_end) {
-        Channel
-            .fromPath("${params.data_dir}/raw/*.fastq.gz")
-            .map{row -> tuple(row.baseName.split("\\.fastq")[0], tuple(row))}
-            .set{raw}
-        n = file("${params.data_dir}/raw/*.fastq.gz").size()
-    } else {
-        Channel
-            .fromFilePairs([
-                "${params.data_dir}/raw/*_R{1,2}_001.fastq.gz",
-                "${params.data_dir}/raw/*_{1,2}.fastq.gz",
-                "${params.data_dir}/raw/*_R{1,2}.fastq.gz"
-            ])
-            .ifEmpty { error "Cannot find any read files in ${params.data_dir}/raw!" }
-            .set{raw}
-        n = file("${params.data_dir}/raw/*.f*.gz").size() / 2
-    }
-
-    // Calculate db memory requirement
-    if (params.dbmem) {
-        db_size = MemoryUnit.of("${params.dbmem} GB")
-    } else {
-        db_size = MemoryUnit.of(file("${params.db}/hash.k2d").size()) + 6.GB
-        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
-    }
-
-    // quality filtering
-    preprocess(raw)
-
-
-    // quantify taxa abundances
-    batched = batchify(preprocess.out, n, !params.single_end, params.batchsize)
-    if (params.single_end) {
-        k2 = kraken_single(batched)
-    } else {
-        k2 = kraken_paired(batched)
-    }
-
-    k2.flatten().map{tuple it.baseName.split(".k2")[0], it} | architeuthis_filter | kraken_report
-    count_taxa(kraken_report.out.combine(levels))
-    count_taxa.out.map{s -> tuple(s[1], s[2])}
-        .groupTuple()
-        .set{merge_groups}
-    merge_taxonomy(merge_groups)
-
-    if (params.mapping) {
-        // Get individual mappings
-        summarize_mappings(architeuthis_filter.out)
-        summarize_mappings.out.collect() | merge_mappings
-    }
-
-    // Add taxon lineages
-    add_lineage(merge_taxonomy.out)
-
-    // Quantify foods
-    add_lineage.out.collect() | quantify
-
-    // quality overview
-    multiqc(merge_taxonomy.out.map{it[1]}.collect())
 }

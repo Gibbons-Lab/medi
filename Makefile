@@ -1,3 +1,4 @@
+CXX := g++
 K2DIR := "src/kraken2"
 SRC := ${K2DIR}/src
 
@@ -6,7 +7,7 @@ repo:
 	git clone https://github.com/daydream-boost/kraken2 ${K2DIR}
 
 report: repo
-	g++ -O3 -std=c++11 \
+	${CXX} -O3 -std=c++11 \
 		${SRC}/mmap_file.cc ${SRC}/reports.cc ${SRC}/taxonomy.cc \
 		${SRC}/kraken2-report.cpp -o ./bin/kraken2-report
 
