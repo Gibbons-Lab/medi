@@ -56,7 +56,7 @@ If this does not work you can compile it using the provided Makefile:
 
 ```bash
 conda activate medi
-make
+make report
 ```
 
 This will compile the report generator for your platform and replace the binary.
