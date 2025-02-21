@@ -127,7 +127,7 @@ process preprocess {
 }
 
 process kraken {
-    cpus params.threads
+    cpus params.maxcpus
     memory { estimate_db_size("${params.db}/hash.k2d") }
     time { 2.h + ids.size() * 0.5.h }
     scratch false
@@ -148,7 +148,7 @@ process kraken {
     from subprocess import run
 
     base_args = [
-        "kraken2", "--db", "${params.kraken2_db}",
+        "kraken2", "--db", "${params.db}",
         "--confidence", "${params.confidence}",
         "--threads", "${task.cpus}", "--gzip-compressed"
     ]
