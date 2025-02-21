@@ -61,6 +61,7 @@ workflow {
     batched = preprocess.out    // buffer the samples into batches
         .collate(params.batchsize)
         .map{it -> tuple it.collect{a -> a[0]}.sort(), it.flatMap{a -> a[1]}.sort()}
+    batched.view()
     // run Kraken2 per batch
     kraken(batched)
 
