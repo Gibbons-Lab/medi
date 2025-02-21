@@ -60,7 +60,7 @@ workflow {
     // quantify taxa abundances
     batched = preprocess.out    // buffer the samples into batches
         .collate(params.batchsize)
-        .map{it -> tuple it.collect{a -> a[0]}.sort(), it.flatMap{a -> a[1]}.sort()}
+        .map{it -> tuple it.collect{a -> a[0]}.sort(), it.collect{a -> a[1]}.flatten().sort()}
     batched.view()
     // run Kraken2 per batch
     kraken(batched)
