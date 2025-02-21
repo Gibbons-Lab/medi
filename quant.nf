@@ -66,7 +66,7 @@ workflow {
 
     // filter Kraken2 results and generate reports
     kraken.out
-        .flatten()
+        .flatMap{it[0]}
         .map{tuple it.baseName.split(".k2")[0], it}
         | architeuthis_filter | kraken_report
     count_taxa(kraken_report.out.combine(levels))
