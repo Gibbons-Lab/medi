@@ -44,7 +44,7 @@ def helpMessage() {
         nextflow run quant.nf -resume -with-conda /path/to/conda/env --db /path/to/medi_db
 
     Required arguments:
-        --db <db_dir>            Directory containing the MEDI database.
+        --db <db_dir>               Directory containing the MEDI database.
 
     Options:
       General:
@@ -206,8 +206,6 @@ process kraken {
         rev = reads[1::2]
         base_args += ["--paired"]
         assert len(fwd) == len(rev)
-
-    assert len(ids) == len(fwd)
 
     for i, idx in enumerate(reads):
         idx = idx.baseName.split("_filtered_R")[0]
