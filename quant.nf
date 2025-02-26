@@ -10,11 +10,16 @@ params.min_length = 50
 params.quality_threshold = 20
 params.read_length = 150
 params.threshold = 10
+params.consistency = 0.95
+params.entropy = 0.1
+params.multiplicity = 4
 params.confidence = 0.3
 params.mapping = false
 params.batchsize = 400
 params.maxcpus = 24
 params.dbmem = null
+params.help = false
+
 
 // Helper to calculate the required RAM for the Kraken2 database
 def estimate_db_size(hash) {
@@ -31,8 +36,45 @@ def estimate_db_size(hash) {
     return db_size
 }
 
+def helpMessage() {
+    log.info """
+    ~~~ MEDI - Metagenomic Estimation of Dietary Intake ~~~
+
+    Usage:
+        nextflow run quant.nf -resume -with-conda /path/to/conda/env --db /path/to/medi_db
+
+    Required arguments:
+        --db <db_dir>            Directory containing the MEDI database.
+
+    Options:
+      General:
+        --single_end                Set if the data is single-end. Default: false.
+        --trim_front <int>          Number of bases to trim from the 5' end of reads. Default: 5.
+        --min_length <int>          Minimum length of reads to keep. Default: 50.
+        --quality_threshold <int>   Minimum quality score to keep a base. Default: 20.
+        --batchsize <int>           Number of samples to process in a batch. Default: 400.
+        --maxcpus <int>             Maximum number of CPUs to use. Default: 24.
+        --dbmem <int>               Memory to reserve for the Kraken2 database. Default: calculate automatically from DB.
+      Bracken:
+        --read_length <int>         Read length for Bracken. Default: 150.
+        --threshold <int>           Bracken read threshold. Default: 10.
+        --mapping                   Generate mapping summaries. Default: false.
+      Architeuthis (decoy filtering):
+        --consistency <float>       Minimum consistency score for a classification to be kept. Default: 0.95.
+        --entropy <float>           Maximum entropy score for a classification to be kept. Default: 0.1.
+        --multiplicity <int>        Maximum multiplicity of a classification to be kept. Default: 4.
+""".stripIndent()
+}
+
+/* Workflow definition starts here */
 
 workflow {
+        // Show help message
+    if (params.help) {
+        helpMessage()
+        exit 0
+    }
+
     Channel
         .fromList(["D", "G", "S"])
         .set{levels}
@@ -60,7 +102,7 @@ workflow {
     // quantify taxa abundances
     batched = preprocess.out    // buffer the samples into batches
         .collate(params.batchsize)
-        .map{it -> tuple it.collect{a -> a[0]}.sort(), it.collect{a -> a[1]}.flatten().sort()}
+        .map{it -> it.collect{a -> a[1]}.flatten().sort()}
 
     // run Kraken2 per batch
     kraken(batched)
@@ -130,12 +172,12 @@ process preprocess {
 process kraken {
     cpus params.maxcpus
     memory { estimate_db_size("${params.db}/hash.k2d") }
-    time { 2.h + ids.size() * 0.5.h }
+    time { 2.h + reads.size() * 0.5.h }
     scratch false
     publishDir "${params.data_dir}/kraken2"
 
     input:
-    tuple val(ids), path(reads)
+    path(reads)
 
     output:
     tuple path("*.k2"), path("*.tsv")
@@ -154,7 +196,6 @@ process kraken {
         "--threads", "${task.cpus}", "--gzip-compressed"
     ]
 
-    ids = "${ids.join(' ')}".split()
     reads = "${reads}".split()
 
     se = ${params.single_end ? "True" : "False"}
@@ -168,7 +209,8 @@ process kraken {
 
     assert len(ids) == len(fwd)
 
-    for i, idx in enumerate(ids):
+    for i, idx in enumerate(reads):
+        idx = idx.baseName.split("_filtered_R")[0]
         args = base_args + [
             "--output", f"{idx}.k2",
             "--report", f"{idx}.tsv",
@@ -200,8 +242,8 @@ process architeuthis_filter {
     """
     architeuthis mapping filter ${k2} \
         --data-dir ${params.db}/taxonomy \
-        --min-consistency 0.95 --max-entropy 0.1 \
-        --max-multiplicity 4 \
+        --min-consistency ${params.consistency} --max-entropy ${params.entropy} \
+        --max-multiplicity ${params.multiplicity} \
         --out ${id}_filtered.k2
     """
 }
