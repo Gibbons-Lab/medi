@@ -206,13 +206,17 @@ process kraken {
         rev = reads[1::2]
         base_args += ["--paired"]
         assert len(fwd) == len(rev)
+        assert all(
+            [f.split("_filtered_R")[0] for f in fwd] ==
+            [r.split("_filtered_R")[0] for r in rev]
+        )
 
-    for i, idx in enumerate(reads):
-        idx = idx.baseName.split("_filtered_R")[0]
+    for i, read in enumerate(fwd):
+        idx = read.baseName.split("_filtered_R")[0]
         args = base_args + [
             "--output", f"{idx}.k2",
             "--report", f"{idx}.tsv",
-            "--memory-mapping", fwd[i]
+            "--memory-mapping", read
         ]
         if not se:
             args.append(rev[i])
