@@ -206,7 +206,7 @@ process kraken {
         rev = reads[1::2]
         base_args += ["--paired"]
         assert len(fwd) == len(rev)
-        assert all(
+        assert (
             [f.split("_filtered_R")[0] for f in fwd] ==
             [r.split("_filtered_R")[0] for r in rev]
         )
