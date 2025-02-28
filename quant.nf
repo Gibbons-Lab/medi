@@ -212,7 +212,7 @@ process kraken {
         )
 
     for i, read in enumerate(fwd):
-        idx = read.baseName.split("_filtered_R")[0]
+        idx = read.split("_filtered_R")[0]
         args = base_args + [
             "--output", f"{idx}.k2",
             "--report", f"{idx}.tsv",
