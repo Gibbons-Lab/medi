@@ -118,6 +118,8 @@ the matching against the current versions of NCBI Genbank and Nucleotide. You ca
 options(reutil.api.key="XXXXXX")
 ```
 
+Please also the the [troubleshooting guide](docs/db_download.md) in case you encounter issues.
+
 ## (3) Building the hashes
 
 After running the previous step continue with
