@@ -20,6 +20,7 @@ params.maxcpus = 24
 params.dbmem = null
 params.help = false
 
+/* Helper functions */
 
 // Helper to calculate the required RAM for the Kraken2 database
 def estimate_db_size(hash) {
@@ -65,6 +66,8 @@ def helpMessage() {
         --multiplicity <int>        Maximum multiplicity of a classification to be kept. Default: 4.
 """.stripIndent()
 }
+
+/********************/
 
 /* Workflow definition starts here */
 
@@ -134,6 +137,7 @@ workflow {
     multiqc(merge_taxonomy.out.map{it[1]}.collect())
 }
 
+/* Process definitions */
 
 process preprocess {
     cpus 4
