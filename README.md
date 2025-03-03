@@ -1,4 +1,4 @@
-<img src=".github/logo.png" width="50%">
+<img src="https://github.com/Gibbons-Lab/medi/blob/main/.github/logo.png" width="50%">
 
 # Metagenomic Estimation of Dietary Intake (MEDI)
 
@@ -140,7 +140,8 @@ work and the later steps crash, you can trigger just the hash building using the
 
 > [!WARNING]
 > Do not run this step with the `-resume` Nextflow option as this will result in a
-> corrupted database.
+> corrupted database. In case, all adding sequences worked and you only want to run the
+> build step again, use the `--rebuild=true` option.
 
 ## (4) Quantification for MGS samples
 
