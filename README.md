@@ -1,4 +1,4 @@
-<img src="https://github.com/Gibbons-Lab/medi/blob/main/.github/logo.png" width="50%">
+<img src="docs/logo.png" width="50%">
 
 # Metagenomic Estimation of Dietary Intake (MEDI)
 
