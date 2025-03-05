@@ -6,7 +6,7 @@ Some of the workflows require internet access to download the data. Especially, 
 steps on a node with internet access. We will make sure to separate pipeline steps that do and don't require internet in the next release.
 
 **`download_sequences` will fail due to missing genomes on the NCBI FTP**
-Related issues: #11](https://github.com/Gibbons-Lab/medi/issues/11), [#15](https://github.com/Gibbons-Lab/medi/issues/15), [#16](https://github.com/Gibbons-Lab/medi/issues/16)
+Related issues: [#11](https://github.com/Gibbons-Lab/medi/issues/11), [#15](https://github.com/Gibbons-Lab/medi/issues/15), [#16](https://github.com/Gibbons-Lab/medi/issues/16)
 
 This happens because the matches include broken links. NCBI does not really version Genbank releases and newly added genomes
 are pretty much immediately reflected in the manifests. Sometimes the actual data has not yet been uploaded or genomes were
@@ -52,7 +52,8 @@ Google Drive can also host large files and does not charge for download. However
 are strict API limits for publically shared files. In our tests sharing the database per
 an open link made it virtually impossible to download as there would be repeated errors.
 
-> [!NOTE] We did find a workaround with personalized sharing (sharing with specific
+> [!NOTE] 
+> We did find a workaround with personalized sharing (sharing with specific
 > Google accounts) only, in particular when using the [rclone tool](https://rclone.org/drive)
 > with a [personal API token](https://rclone.org/drive/#making-your-own-client-id).
 > So if you need the version of the DB from the publication please contact us at
