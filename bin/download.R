@@ -13,6 +13,7 @@ matches <- fread(args[1])
 group <- args[2]
 out_folder <- args[3]
 target_id <- args[4]
+rsync <- as.logical(args[5])
 
 
 if (is.null(getOption("reutils.api.key"))) {
@@ -23,9 +24,14 @@ if (is.null(getOption("reutils.api.key"))) {
 
 dir.create(out_folder, recursive = TRUE, showWarnings = FALSE)
 
-ncbi_rsync <- function(url, out) {
-    rsync_url <- gsub("https://", "rsync://", url)
-    ret <- system2("rsync", c("--no-motd", rsync_url, out))
+ncbi_download <- function(url, out, rsync = TRUE) {
+    if (rsync) {
+        rsync_url <- gsub("https://", "rsync://", url)
+        ret <- system2("rsync", c("--no-motd", rsync_url, out))
+    } else {
+        https_url <- gsub("ftp://", "https://", url)
+        ret <- system2("wget", c("-cN", https_url, out))
+    }
     Sys.chmod(out, "0755")
     return(ret)
 }
@@ -38,7 +44,7 @@ download_genome <- function(hit, out_dir="sequences") {
     for (i in 0:7) {
         if (file.exists(hit$filename)) unlink(hit$filename)
         ret <- tryCatch(
-            ncbi_rsync(hit$url, hit$filename),
+            ncbi_download(hit$url, hit$filename, rsync),
             error = function(e) return(1),
             warning = function(e) return(1)
         )
