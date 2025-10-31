@@ -50,6 +50,7 @@ workflow {
 
 process download_foodb_genbank {
     cpus 1
+    memory "2 GB"
     publishDir "${params.out}/dbs"
 
     input:
