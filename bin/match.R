@@ -10,7 +10,8 @@ library(reutils)
 
 ASSEMBLY_SEARCH <- "txid%s[orgn]"
 NT_SEARCH <- "txid%s[orgn] AND 10000:10000000000[SLEN] AND biomol_genomic[PROP]"
-GB_SCORES <- c(Contig = 0, Chromosome = 1, Scaffold = 1, `Complete Genome` = 2)
+GB_CATEGORY_SCORES <- c(`na` = 0, `representative genome` = 10, `reference genome` = 20)
+GB_ASSEMBLY_SCORES <- c(Contig = 0, Chromosome = 1, Scaffold = 1, `Complete Genome` = 2)
 
 
 if (is.null(getOption("reutils.api.key"))) {
@@ -22,9 +23,8 @@ if (is.null(getOption("reutils.api.key"))) {
 genbank_quality <- function(dt) {
     dt <- dt[order(-seq_rel_date)]
     dt[, "score" := 0]
-    dt["reference genome" %in% refseq_category, score := score + 20]
-    dt["representative genome" %in% refseq_category, score := score + 10]
-    dt[, score := score + GB_SCORES[assembly_level]]
+    dt[, score := score + GB_CATEGORY_SCORES[refseq_category] + GB_ASSEMBLY_SCORES[assembly_level]]
+    dt[is.na(score), "score" := 0]
 
     return(dt)
 }
