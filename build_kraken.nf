@@ -30,12 +30,12 @@ def estimate_db_size(db, extra) {
 workflow {
     println(params)
 
-    rlens = Channel.from(params.readLengths)
+    rlens = channel.from(params.readLengths)
 
     if (!params.rebuild) {
-        Channel.fromPath("${params.out}/sequences/*.fna.gz").set{food_sequences}
+        channel.fromPath("${params.out}/sequences/*.fna.gz").set{food_sequences}
 
-        Channel.fromPath("${params.additionalDecoys}/*.fna.gz")
+        channel.fromPath("${params.additionalDecoys}/*.fna.gz")
         .set{decoy_sequences}
 
         sequences = decoy_sequences.concat(food_sequences)
@@ -49,8 +49,8 @@ workflow {
             add_sequences.out.collect()
         )
     } else {
-        taxonomy = Channel.of(file("${params.db}/taxonomy"))
-        lib = Channel.of(file("${params.out}/library"))
+        taxonomy = channel.of(file("${params.db}/taxonomy"))
+        lib = channel.of(file("${params.out}/library"))
     }
 
     build_kraken_db(taxonomy, lib)
@@ -146,7 +146,7 @@ process build_kraken_db {
     cpus params.threads
     memory { MemoryUnit.of(params.maxDbSize) + 100.GB }
     cpus params.threads
-    time "72 h"
+    time "36 h"
     publishDir params.db
 
     input:
@@ -168,8 +168,8 @@ process build_kraken_db {
 
 process self_classify {
     cpus params.threads
-    memory { estimate_db_size(bins, 400.GB) }
-    time "5 d"
+    memory { estimate_db_size(bins, 250.GB) }
+    time "1 d"
 
     input:
     tuple path(tax), path(bins), path(seqmap)

@@ -52,7 +52,12 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         } else {
             matches <- matches[score == max(score)]
         }
+
         uids <- matches[, `#assembly_accession`]
+        if (length(uids) == 0) {
+            return(NULL)
+        }
+
         url <- matches[, ftp_path]
         refseq_category <- matches[, refseq_category]
         assembly_level <- matches[, assembly_level]
@@ -72,23 +77,30 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
                 db = "nuccore"
             ))
             Sys.sleep(1/rate)
+            if (not_found(ret)) {
+                break
+            }
+
+            Sys.sleep(1/rate)
             summ <- suppressMessages(
                 esummary(ret, db="nuccore") %>% content("parsed") %>% data.table(fill=T)
             )
-            summ[, "Slen" := as.integer(Slen)]
-            if (ret$no_errors() || not_found(ret)) {
-                break
-            }
+
             if (i == 7) {
                 flog.info("Querying failed for %s. Aborting.", taxid)
                 stop()
             }
         }
+
         uids <- ret %>% uid()
         uids <- uids[!is.na(uids)]
+        if (length(uids) == 0) {
+            return(NULL)
+        }
+
         refseq_category <- "excluded"
         assembly_level <- "contig"
-        seqlength <- summ$Slen
+        seqlength <- as.integer(summ$Slen)
         genome_type <- summ$Genome
         name <- summ$Title
     }
