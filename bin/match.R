@@ -85,6 +85,7 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
             summ <- suppressMessages(
                 esummary(ret, db="nuccore") %>% content("parsed") %>% data.table(fill=T)
             )
+            if (ret$no_errors() && summ$no_errors()) break
         }
         if (i == 7) {
             flog.info("Querying failed for %s. Aborting.", taxid)
