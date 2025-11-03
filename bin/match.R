@@ -111,11 +111,15 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         name <- s$Title
     }
 
-    return(data.table(
+    result <- data.table(
         id = uids, db = db, matched_taxid = taxid, url = url,
         refseq_category = refseq_category, assembly_level = assembly_level,
         seqlength=seqlength, name = name, genome_type = genome_type
-    ))
+    )
+
+    print(result)
+
+    return(result)
 }
 
 ordered_match <- function(
