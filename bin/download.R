@@ -7,6 +7,8 @@ library(futile.logger)
 library(Biostrings)
 library(R.utils)
 
+MAX_SEQLENGTH = 2e9
+
 args <- commandArgs(trailingOnly = TRUE)
 
 matches <- fread(args[1])
@@ -68,29 +70,44 @@ download_genome <- function(hit, out_dir="sequences") {
     return(hit)
 }
 
-download_sequences <- function(hits, taxid, out_dir="sequences") {
-    hits <- copy(hits)
-    filename <- file.path(out_dir, paste0(as.character(taxid), ".fna"))
-    flog.info("Downloading sequences for taxon %s...", taxid)
-    for (i in 0:7) {
-        Sys.sleep(1/rate + 2^i)
-        if (file.exists(filename)) unlink(filename)
-        post <- epost(unique(hits$id), db = "nuccore")
-        Sys.sleep(1/rate)
-        fetch <- suppressMessages(
+fragmented_efetch <- function(hits, filename) {
+    hits[, "group" := floor(cumsum(seqlength) / MAX_SEQLENGTH)]
+    if (file.exists(filename)) unlink(filename)
+
+    for (g in unique(hits$group)) {
+        for (i in 0:7) {
+            Sys.sleep(1/rate + 2^i)
+            post <- epost(hits[group == g, id], db = "nuccore")
+            Sys.sleep(1/rate)
+            fetch <- suppressMessages(
                 efetch(post, db = "nuccore",
                        rettype = "fasta", retmode = "text")
-        )
-        if (length(getError(fetch)) == 1) {
-            write(content(fetch), filename)
-            if (file.exists(filename) && grepl(">", content(fetch))) {
-                break
+            )
+            if (length(getError(fetch)) == 1) {
+                write(content(fetch), filename, append=TRUE)
+                if (file.exists(filename) && grepl(">", content(fetch))) {
+                    done <- TRUE
+                    break
+                }
             }
         }
+        if (i == 7) {
+            if (file.exists(filename)) unlink(filename)
+            done <- FALSE
+            break
+        }
     }
-    if (!file.exists(filename) || !grepl(">", content(fetch))) {
+
+    return(done)
+}
+
+download_sequences <- function(hits, taxid, out_dir="sequences") {
+    hits <- copy(hits) %>% unique(by="id")
+    filename <- file.path(out_dir, paste0(as.character(taxid), ".fna"))
+    flog.info("Downloading sequences for taxon %s...", taxid)
+    done <- fragmented_efetch(hits, filename)
+    if (!done) {
         flog.error("Failed downloading %s. UIDs=%s) :(", taxid, paste(unique(hits$id), collapse=", "))
-        print(post)
         stop()
     }
     hit <- hits[1]

@@ -56,6 +56,9 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         url <- matches[, ftp_path]
         refseq_category <- matches[, refseq_category]
         assembly_level <- matches[, assembly_level]
+        seqlength <- matches$genome_size
+        genome_type <- "full genome"
+        name <- paste(matches$organism_name, matches$infraspecific_name)
     } else {
         r <- rate
         for (i in 0:7) {
@@ -68,6 +71,11 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
                 sort = "SLEN",
                 db = "nuccore"
             ))
+            Sys.sleep(1/rate)
+            summ <- suppressMessages(
+                esummary(ret, db="nuccore") %>% content("parsed") %>% data.table(fill=T)
+            )
+            summ[, "Slen" := as.integer(Slen)]
             if (ret$no_errors() || not_found(ret)) {
                 break
             }
@@ -80,14 +88,17 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         uids <- uids[!is.na(uids)]
         refseq_category <- "excluded"
         assembly_level <- "contig"
-
+        seqlength <- summ$Slen
+        genome_type <- summ$Genome
+        name <- summ$Title
     }
     if (length(uids) == 0) {
         return(NULL)
     }
     return(data.table(
         id = uids, db = db, matched_taxid = taxid, url = url,
-        refseq_category = refseq_category, assembly_level = assembly_level
+        refseq_category = refseq_category, assembly_level = assembly_level,
+        seqlength=seqlength, name = name, genome_type = genome_type
     ))
 }
 
