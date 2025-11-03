@@ -104,6 +104,10 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
             return(NULL)
         }
 
+        if (length(uids) == 0) {
+            return(NULL)
+        }
+
         refseq_category <- "excluded"
         assembly_level <- "contig"
         seqlength <- as.integer(s$Slen)
