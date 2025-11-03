@@ -77,16 +77,11 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
                 db = "nuccore"
             ))
             Sys.sleep(1/rate)
-            if (not_found(ret)) {
+            if (ret$no_errors() || not_found(ret)) {
                 break
             }
-
-            Sys.sleep(1/rate)
-            summ <- suppressMessages(
-                esummary(ret, db="nuccore") %>% content("parsed") %>% data.table(fill=T)
-            )
-            if (ret$no_errors()) break
         }
+
         if (i == 7) {
             flog.info("Querying failed for %s. Aborting.", taxid)
             stop()
@@ -94,19 +89,28 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
 
         uids <- ret %>% uid()
         uids <- uids[!is.na(uids)]
-        if (length(uids) == 0) {
+
+        s <- list(Slen = 0, Genome = NA, Title = NA)
+        if (length(uids) > 0) {
+            for (i in 0:7) {
+                Sys.sleep(1 / rate + 2^i)
+                summ <- suppressMessages(esummary(ret, db="nuccore"))
+                if (summ$no_errors()) {
+                    s <- summ %>% content("parsed") %>% data.table(fill=T)
+                    break
+                }
+            }
+        } else {
             return(NULL)
         }
 
         refseq_category <- "excluded"
         assembly_level <- "contig"
-        seqlength <- as.integer(summ$Slen)
-        genome_type <- summ$Genome
-        name <- summ$Title
+        seqlength <- as.integer(s$Slen)
+        genome_type <- s$Genome
+        name <- s$Title
     }
-    if (length(uids) == 0) {
-        return(NULL)
-    }
+
     return(data.table(
         id = uids, db = db, matched_taxid = taxid, url = url,
         refseq_category = refseq_category, assembly_level = assembly_level,
