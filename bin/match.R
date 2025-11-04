@@ -96,7 +96,12 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
                 Sys.sleep(1 / rate + 2^i)
                 summ <- suppressMessages(esummary(ret, db="nuccore"))
                 if (summ$no_errors()) {
-                    s <- summ %>% content("parsed") %>% rbindlist(fill=TRUE)
+                    s <- summ %>% content("parsed")
+                    if ("tbl_df" %in% class(s)) {
+                        setDT(s)
+                    } else {
+                        s <- rbindlist(s, fill=TRUE)
+                    }
                     break
                 }
             }
