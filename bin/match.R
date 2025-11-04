@@ -121,7 +121,7 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         refseq_category = refseq_category, assembly_level = assembly_level,
         seqlength=seqlength, name = name, genome_type = genome_type
     )
-    results <- results[order(-seqlength)] %>%
+    result <- result[order(-seqlength)] %>%
         unique(by=c("db", "matched_taxid", "assembly_level", "name", "genome_type"))
 
     flog.info("Found %d unique records for %s with a total size of %g MBps.",
