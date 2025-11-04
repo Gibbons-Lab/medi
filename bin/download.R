@@ -70,9 +70,11 @@ download_genome <- function(hit, out_dir="sequences") {
     return(hit)
 }
 
-fragmented_efetch <- function(hits, filename) {
+fragmented_efetch <- function(hits, taxid, filename) {
     hits[, "group" := floor(cumsum(seqlength) / MAX_SEQLENGTH)]
     if (file.exists(filename)) unlink(filename)
+    flog.info("Downloading sequences for taxon %s [fragmented into %d groups]...",
+        taxid, hits[, uniqueN(group)])
 
     for (g in unique(hits$group)) {
         for (i in 0:7) {
@@ -104,8 +106,7 @@ fragmented_efetch <- function(hits, filename) {
 download_sequences <- function(hits, taxid, out_dir="sequences") {
     hits <- copy(hits) %>% unique(by="id")
     filename <- file.path(out_dir, paste0(as.character(taxid), ".fna"))
-    flog.info("Downloading sequences for taxon %s...", taxid)
-    done <- fragmented_efetch(hits, filename)
+    done <- fragmented_efetch(hits, taxid, filename)
     if (!done) {
         flog.error("Failed downloading %s. UIDs=%s) :(", taxid, paste(unique(hits$id), collapse=", "))
         stop()
