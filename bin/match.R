@@ -96,15 +96,11 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
                 Sys.sleep(1 / rate + 2^i)
                 summ <- suppressMessages(esummary(ret, db="nuccore"))
                 if (summ$no_errors()) {
-                    s <- summ %>% content("parsed") %>% data.table(fill=T)
+                    s <- summ %>% content("parsed") %>% rbindlist(fill=TRUE)
                     break
                 }
             }
         } else {
-            return(NULL)
-        }
-
-        if (length(uids) == 0) {
             return(NULL)
         }
 
@@ -120,8 +116,6 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         refseq_category = refseq_category, assembly_level = assembly_level,
         seqlength=seqlength, name = name, genome_type = genome_type
     )
-
-    print(result)
 
     return(result)
 }
