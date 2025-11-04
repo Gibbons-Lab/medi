@@ -110,17 +110,17 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
 
         refseq_category <- "excluded"
         assembly_level <- "contig"
-        if ("Slen" %in% names(s) {
+        if ("Slen" %in% names(s)) {
             seqlength <- as.integer(s$Slen)
         } else {
             seqlength <- 0
         }
-        if ("Genome" %in% names(s) {
+        if ("Genome" %in% names(s)) {
             genome_type <- s$Genome
         } else {
             genome_type <- "na"
         }
-        if ("Title" %in% names(s) {
+        if ("Title" %in% names(s)) {
             name <- s$Title
         } else {
             name <- "na"
