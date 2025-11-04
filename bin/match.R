@@ -90,7 +90,6 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         uids <- ret %>% uid()
         uids <- uids[!is.na(uids)]
 
-        s <- list(Slen = 0, Genome = NA, Title = NA)
         if (length(uids) > 0) {
             for (i in 0:7) {
                 Sys.sleep(1 / rate + 2^i)
@@ -111,9 +110,21 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
 
         refseq_category <- "excluded"
         assembly_level <- "contig"
-        seqlength <- ifelse("Slen" %in% names(s), as.integer(s$Slen), 0)
-        genome_type <- ifelse("Genome" %in% names(s), s$Genome, "na")
-        name <- ifelse("Title" %in% names(s), s$Title, "na")
+        if ("Slen" %in% names(s) {
+            seqlength <- as.integer(s$Slen)
+        } else {
+            seqlength <- 0
+        }
+        if ("Genome" %in% names(s) {
+            genome_type <- s$Genome
+        } else {
+            genome_type <- "na"
+        }
+        if ("Title" %in% names(s) {
+            name <- s$Title
+        } else {
+            name <- "na"
+        }
     }
 
     result <- data.table(
