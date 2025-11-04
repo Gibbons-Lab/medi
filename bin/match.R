@@ -37,7 +37,7 @@ not_found <- function(res) {
 }
 
 find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
-    url <- NULL
+    url <- NA
     taxid <- as.character(taxid)[!is.na(taxid)]
     if (db == "genbank") {
         flog.info("Querying the assembly database for taxon %s...", taxid)
