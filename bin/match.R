@@ -122,7 +122,7 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         seqlength=seqlength, name = name, genome_type = genome_type
     )
     flog.info("Found %d records for %s with a total size of %g MBps.",
-        nrow(result), taxid, result[, sum(seqlength) / 1e6])
+        nrow(result), taxid, sum(seqlength) / 1e6)
 
     return(result)
 }
