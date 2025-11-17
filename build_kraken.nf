@@ -44,7 +44,6 @@ workflow {
         add_existing(taxonomy, params.additionalDbs)
         add_sequences(sequences, taxonomy)
         lib = assemble_library(
-            taxonomy,
             add_existing.out.collect(),
             add_sequences.out.collect()
         )

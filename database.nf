@@ -315,7 +315,7 @@ process sketch {
 }
 
 process ANI {
-    cpus params.threads
+    cpus 8
     memory "96 GB"
     publishDir "${params.out}", mode: "copy", overwite: true
     time "8 h"
