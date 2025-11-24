@@ -29,12 +29,12 @@ def estimate_db_size(hash, extra) {
     // Calculate db memory requirement
     if (params.dbmem) {
         db_size = MemoryUnit.of("${params.dbmem} GB")
-    } else { 
+    } else {
         hash_size = MemoryUnit.of(file(hash).size())
         extra = MemoryUnit.of(extra)
         db_size = hash_size + extra
         log.info(
-            "Based on the hash size and input I am reserving ${db_size.toGiga()}GB" + 
+            "Based on the hash size and input I am reserving ${db_size.toGiga()}GB" +
             " of memory for Kraken2 [hash: ${hash_size.toGiga()} GB, reads: ${extra.toGiga()} GB]."
         )
     }
@@ -329,7 +329,8 @@ process count_taxa {
         fixk2report.R ${report} ${lev}/${report} && \
         bracken -d ${params.db} -i ${lev}/${report} \
         -l ${lev} -o ${lev}/${lev}_${id}.b2 -r ${params.read_length} \
-        -t ${params.threshold} -w ${lev}/${id}_bracken.tsv
+        -t ${params.threshold} -w ${lev}/${id}_bracken.tsv || \
+        touch ${lev}/${lev}_${id}.b2
     """
 }
 
