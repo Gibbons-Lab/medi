@@ -82,7 +82,7 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
             }
         }
 
-        if (i == 7) {
+        if ((i == 7) && !ret$no_errors()) {
             flog.info("Querying failed for %s. Aborting.", taxid)
             stop()
         }
