@@ -121,7 +121,9 @@ workflow {
         .map{tuple it.baseName.split(".k2")[0], it}
         | architeuthis_filter | kraken_report
     count_taxa(kraken_report.out.combine(levels))
-    count_taxa.out.map{s -> tuple(s[1], s[2])}
+    count_taxa.out
+        .filter{ s -> !s[2].isEmpty()}
+        .map{s -> tuple(s[1], s[2])}
         .groupTuple()
         .set{merge_groups}
     merge_taxonomy(merge_groups)
