@@ -1,0 +1,28 @@
+--- /home/gpfs/o_diener/code/k2/scripts/build_kraken2_db.sh	2025-11-17 14:42:43.458544663 +0100
++++ /home/gpfs/o_diener/miniforge3/envs/medi/share/kraken2-2.1.3-4/libexec/build_kraken2_db.sh	2025-04-29 09:24:03.422237276 +0200
+@@ -32,7 +32,7 @@
+ }
+ 
+ function list_sequence_files() {
+-  find library/ '(' -name '*.fna' -o -name '*.faa' ')' -print0
++  find -L library/ '(' -name '*.fna' -o -name '*.faa' ')' -print0
+ }
+ 
+ start_time=$(get_current_time)
+@@ -66,14 +66,14 @@
+ 
+ echo "Creating sequence ID to taxonomy ID map (step 1)..."
+ if [ -d "library/added" ]; then
+-  find library/added/ -name 'prelim_map_*.txt' | xargs cat > library/added/prelim_map.txt
++  find -L library/added/ -name 'prelim_map_*.txt' | xargs cat > library/added/prelim_map.txt
+ fi
+ seqid2taxid_map_file=seqid2taxid.map
+ if [ -e "$seqid2taxid_map_file" ]; then
+   echo "Sequence ID to taxonomy ID map already present, skipping map creation."
+ else
+   step_time=$(get_current_time)
+-  find library/ -maxdepth 2 -name prelim_map.txt | xargs cat > taxonomy/prelim_map.txt
++  find -L library/ -maxdepth 2 -name prelim_map.txt | xargs cat > taxonomy/prelim_map.txt
+   if [ ! -s "taxonomy/prelim_map.txt" ]; then
+     echo "No preliminary seqid/taxid mapping files found, aborting."
+     exit 1

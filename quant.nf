@@ -146,7 +146,7 @@ workflow {
 
 process preprocess {
     cpus 4
-    memory "6 GB"
+    memory "8 GB"
     publishDir "${params.out_dir}/preprocessed"
     time "1h"
 
