@@ -2,8 +2,11 @@ name: Build and push the MEDI image
 
 on:
   push:
+    branches:
+      - "**"
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
+  pull_request:
 
 env:
   IMAGE_NAME: cdiener/medi
@@ -27,7 +30,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v5
         with:
-          push: true
+          push: contains(github.ref, "tag")
           tags: ${{ steps.meta.outputs.tags }}
           annotations: ${{ steps.meta.outputs.annotations }}
       - name: Image digest
