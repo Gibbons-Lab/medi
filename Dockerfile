@@ -1,4 +1,4 @@
-FROM conda-forge:miniforge3
+FROM conda-forge/miniforge3:latest
 
 RUN mkdir /tmp/medi
 
