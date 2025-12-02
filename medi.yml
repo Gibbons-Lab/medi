@@ -2,8 +2,8 @@ name: medi
 channels:
   - conda-forge
   - bioconda
-  - defaults
 dependencies:
+  - patch
   - python>=3.8
   - nextflow>=23.10.0
   - fastp
