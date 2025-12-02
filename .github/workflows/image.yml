@@ -30,7 +30,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v5
         with:
-          push: contains(github.ref, "tag")
+          push: {{ contains(github.ref, "tag") }}
           tags: ${{ steps.meta.outputs.tags }}
           annotations: ${{ steps.meta.outputs.annotations }}
       - name: Image digest
