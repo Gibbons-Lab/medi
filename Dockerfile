@@ -1,6 +1,6 @@
 FROM condaforge/miniforge3:latest
 
-RUN mkdir /tmp/medi
+RUN mkdir /tmp/medi /tmp/medi/bin
 
 COPY medi.yml Makefile patches /tmp/medi
 
