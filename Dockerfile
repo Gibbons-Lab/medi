@@ -1,4 +1,4 @@
-FROM condaforge/miniforge3:latest
+FROM docker.io/condaforge/miniforge3:latest
 
 RUN mkdir /tmp/medi /tmp/medi/bin
 
@@ -13,6 +13,6 @@ RUN mamba env create -n medi -f /tmp/medi/medi.yml && \
     find ${CONDA_DIR} -follow -type f -name '*.a' -delete && \
     find ${CONDA_DIR} -follow -type f -name '*.pyc' -delete && \
     conda clean --force-pkgs-dirs --all --yes  && \
-    echo ". ${CONDA_DIR}/etc/profile.d/conda.sh && conda activate medi" >> /etc/skel/.bashrc && \
-    echo ". ${CONDA_DIR}/etc/profile.d/conda.sh && conda activate medi" >> ~/.bashrc && \
     rm -rf /tmp/medi
+
+ENTRYPOINT ["mamba", "run", "-n", "medi"]
