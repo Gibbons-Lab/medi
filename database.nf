@@ -39,7 +39,7 @@ workflow {
     println(params)
     // Add more decoy sequences
     if (params.additionalDecoys) {
-        Channel.fromPath("${params.additionalDecoys}").set{decoy_manifest}
+        channel.fromPath("${params.additionalDecoys}").set{decoy_manifest}
         download_decoys(decoy_manifest)
     }
 

@@ -30,7 +30,7 @@ def estimate_db_size(hash, extra) {
     if (params.dbmem) {
         db_size = MemoryUnit.of("${params.dbmem} GB")
     } else {
-        hash_size = MemoryUnit.of(file(hash).size())
+        def hash_size = MemoryUnit.of(file(hash).size())
         extra = MemoryUnit.of(extra)
         db_size = hash_size + extra
         log.info(
@@ -83,18 +83,18 @@ workflow {
         exit 0
     }
 
-    Channel
+    channel
         .fromList(["D", "G", "S"])
         .set{levels}
 
     // find files
     if (params.single_end) {
-        Channel
+        channel
             .fromPath("${params.data_dir}/raw/*.fastq.gz")
             .map{row -> tuple(row.baseName.split("\\.fastq")[0], tuple(row))}
             .set{raw}
     } else {
-        Channel
+        channel
             .fromFilePairs([
                 "${params.data_dir}/raw/*_R{1,2}_001.fastq.gz",
                 "${params.data_dir}/raw/*_{1,2}.fastq.gz",
@@ -182,8 +182,8 @@ process preprocess {
 
 process kraken {
     cpus params.maxcpus
-    memory { estimate_db_size("${params.db}/hash.k2d", reads*.size().max()*4) }
-    time { 2.h + reads.size() * 0.5.h }
+    memory estimate_db_size("${params.db}/hash.k2d", reads*.size().max()*4)
+    time 2.h + reads.size() * 0.5.h
     scratch false
     publishDir "${params.data_dir}/kraken2"
 

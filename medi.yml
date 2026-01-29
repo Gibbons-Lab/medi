@@ -22,6 +22,6 @@ dependencies:
   - r-magrittr
   - r-futile.logger
   - bioconductor-biostrings
-  - taxonkit
-  - architeuthis>=0.4.0
+  - taxonkit>=0.20.0
+  - architeuthis>=0.5.0
   - gxx
