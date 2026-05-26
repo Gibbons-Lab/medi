@@ -11,8 +11,8 @@ params.downloads = "${launchDir}/data"
 params.out = "${launchDir}/data"
 params.db = "${params.out}/medi_db"
 params.additionalDecoys ="${params.out}/decoys"
-params.useFtp = false
-params.readLengths = [100, 150, 250]
+params.useFtp = true
+params.readLengths = [100, 150, 250, 10000]
 
 /* Helper functions */
 
@@ -70,7 +70,7 @@ process setup_kraken_db {
 
     script:
     """
-    kraken2-build --download-taxonomy --db medi_db
+    kraken2-build --download-taxonomy --db medi_db ${params.useFtp ? "--use-ftp" : ""}
     """
 }
 
