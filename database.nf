@@ -5,7 +5,6 @@ nextflow.enable.dsl = 2
 params.threads = 20
 params.out = "${launchDir}/data"
 params.additionalDecoys = null //"${params.out}/decoys.csv"
-params.useRsync = true
 
 workflow {
     def foodb = "https://foodb.ca/public/system/downloads/foodb_2020_4_7_csv.tar.gz"
@@ -197,7 +196,7 @@ process download_nucleotide {
 
     script:
     """
-    download.R $matches "nucleotide" sequences "all" ${params.useRsync}
+    download.R $matches "nucleotide" sequences "all"
     """
 }
 
@@ -215,7 +214,7 @@ process download_genbank {
 
     script:
     """
-    download.R $matches "genbank" sequences "${id}" ${params.useRsync}
+    download.R $matches "genbank" sequences "${id}"
     """
 }
 
@@ -233,7 +232,7 @@ process download_decoys {
 
     script:
     """
-    download.R $decoys decoys decoys "all" ${params.useRsync}
+    download.R $decoys decoys decoys "all"
     """
 }
 

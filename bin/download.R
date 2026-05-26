@@ -15,38 +15,46 @@ matches <- fread(args[1])
 group <- args[2]
 out_folder <- args[3]
 target_id <- args[4]
-rsync <- as.logical(args[5])
 
 
 if (is.null(getOption("reutils.api.key"))) {
     rate <- 0.9
 } else {
     rate <- 9
+    api_key <- getOption("reutils.api.key")
 }
 
 dir.create(out_folder, recursive = TRUE, showWarnings = FALSE)
 
-ncbi_download <- function(url, out, rsync = TRUE) {
-    if (rsync) {
-        rsync_url <- gsub("https://", "rsync://", url)
-        ret <- system2("rsync", c("--no-motd", rsync_url, out))
-    } else {
-        https_url <- gsub("ftp://", "https://", url)
-        ret <- system2("wget", c("-cN", https_url, out))
-    }
-    Sys.chmod(out, "0755")
+ncbi_download <- function(accession, filename) {
+    data_package <- paste0(accession, ".zip")
+    ret <- system2(
+        "datasets",
+        c("download", "genome", "accession", accession,
+          "--include", "genome",
+          "--filename", paste0(accession, ".zip"))
+    )
+
+    if (ret != 0) return(ret)
+
+    unzip(
+        data_package,
+        paste0("ncbi_dataset/data/", accession, "/", filename),
+        junkpaths=TRUE
+    )
+    unlink(data_package)
+
     return(ret)
 }
 
 download_genome <- function(hit, out_dir="sequences") {
     hit <- copy(hit[1])
     id <- basename(hit$url)
-    hit$url <- paste0(hit$url, "/", id, "_genomic.fna.gz")
-    hit$filename <- file.path(out_dir, paste0(id, ".fna.gz"))
+    hit$filename <- file.path(out_dir, paste0(id, ".fna"))
     for (i in 0:7) {
         if (file.exists(hit$filename)) unlink(hit$filename)
         ret <- tryCatch(
-            ncbi_download(hit$url, hit$filename, rsync),
+            ncbi_download(hit$id, hit$filename),
             error = function(e) return(1),
             warning = function(e) return(1)
         )

@@ -26,3 +26,4 @@ dependencies:
   - taxonkit>=0.20.0
   - architeuthis>=0.5.0
   - gxx
+  - ncbi-datasets-cli
