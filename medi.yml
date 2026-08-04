@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
+  - patch
   - python>=3.8
   - nextflow>=23.10.0
   - fastp
@@ -22,6 +23,7 @@ dependencies:
   - r-magrittr
   - r-futile.logger
   - bioconductor-biostrings
-  - taxonkit
-  - architeuthis>=0.4.0
+  - taxonkit>=0.20.0
+  - architeuthis>=0.5.0
   - gxx
+  - ncbi-datasets-cli

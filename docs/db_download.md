@@ -1,3 +1,5 @@
+Below some explanations and background.
+
 # Troubleshooting for database downloading
 
 **All downloads are failing in all pipelines**
@@ -46,13 +48,13 @@ expensive (~50-100 USD for every *single* download). So if the database is downl
 
 Pricing for competing cloud providers is similar.
 
-## Sharing using Google Drive
+## Public Sharing using Google Drive
 
 Google Drive can also host large files and does not charge for download. However, there
 are strict API limits for publically shared files. In our tests sharing the database per
 an open link made it virtually impossible to download as there would be repeated errors.
 
-> [!NOTE] 
+> [!NOTE]
 > We did find a workaround with personalized sharing (sharing with specific
 > Google accounts) only, in particular when using the [rclone tool](https://rclone.org/drive)
 > with a [personal API token](https://rclone.org/drive/#making-your-own-client-id).

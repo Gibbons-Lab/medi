@@ -23,15 +23,20 @@ params.help = false
 /* Helper functions */
 
 // Helper to calculate the required RAM for the Kraken2 database
-def estimate_db_size(hash) {
+def estimate_db_size(hash, extra) {
     def db_size = null
 
     // Calculate db memory requirement
     if (params.dbmem) {
         db_size = MemoryUnit.of("${params.dbmem} GB")
     } else {
-        db_size = MemoryUnit.of(file(hash).size()) + 6.GB
-        log.info("Based on the hash size I am reserving ${db_size.toGiga()}GB of memory for Kraken2.")
+        def hash_size = MemoryUnit.of(file(hash).size())
+        extra = MemoryUnit.of(extra)
+        db_size = hash_size + extra
+        log.info(
+            "Based on the hash size and input I am reserving ${db_size.toGiga()}GB" +
+            " of memory for Kraken2 [hash: ${hash_size.toGiga()} GB, reads: ${extra.toGiga()} GB]."
+        )
     }
 
     return db_size
@@ -78,18 +83,18 @@ workflow {
         exit 0
     }
 
-    Channel
+    channel
         .fromList(["D", "G", "S"])
         .set{levels}
 
     // find files
     if (params.single_end) {
-        Channel
+        channel
             .fromPath("${params.data_dir}/raw/*.fastq.gz")
             .map{row -> tuple(row.baseName.split("\\.fastq")[0], tuple(row))}
             .set{raw}
     } else {
-        Channel
+        channel
             .fromFilePairs([
                 "${params.data_dir}/raw/*_R{1,2}_001.fastq.gz",
                 "${params.data_dir}/raw/*_{1,2}.fastq.gz",
@@ -116,7 +121,9 @@ workflow {
         .map{tuple it.baseName.split(".k2")[0], it}
         | architeuthis_filter | kraken_report
     count_taxa(kraken_report.out.combine(levels))
-    count_taxa.out.map{s -> tuple(s[1], s[2])}
+    count_taxa.out
+        .filter{ s -> !s[2].isEmpty()}
+        .map{s -> tuple(s[1], s[2])}
         .groupTuple()
         .set{merge_groups}
     merge_taxonomy(merge_groups)
@@ -141,7 +148,7 @@ workflow {
 
 process preprocess {
     cpus 4
-    memory "6 GB"
+    memory "8 GB"
     publishDir "${params.out_dir}/preprocessed"
     time "1h"
 
@@ -175,8 +182,8 @@ process preprocess {
 
 process kraken {
     cpus params.maxcpus
-    memory { estimate_db_size("${params.db}/hash.k2d") }
-    time { 2.h + reads.size() * 0.5.h }
+    memory estimate_db_size("${params.db}/hash.k2d", reads*.size().max()*4)
+    time 2.h + reads.size() * 0.5.h
     scratch false
     publishDir "${params.data_dir}/kraken2"
 
@@ -324,7 +331,8 @@ process count_taxa {
         fixk2report.R ${report} ${lev}/${report} && \
         bracken -d ${params.db} -i ${lev}/${report} \
         -l ${lev} -o ${lev}/${lev}_${id}.b2 -r ${params.read_length} \
-        -t ${params.threshold} -w ${lev}/${id}_bracken.tsv
+        -t ${params.threshold} -w ${lev}/${id}_bracken.tsv || \
+        touch ${lev}/${lev}_${id}.b2
     """
 }
 

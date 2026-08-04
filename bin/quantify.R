@@ -30,7 +30,7 @@ abundances[, "total_reads" := sum(reads), by="sample_id"]
 abundances[, "total_raw_reads" := sum(kraken_raw_reads), by="sample_id"]
 abundances[
     ,
-    "bacteria_reads" := sum(reads[grepl("k__Bacteria;", lineage)], na.rm = TRUE),
+    "bacteria_reads" := sum(reads[grepl("d__Bacteria;", lineage)], na.rm = TRUE),
     by="sample_id"
 ]
 abundances[

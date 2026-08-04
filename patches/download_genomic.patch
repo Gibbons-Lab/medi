@@ -1,0 +1,11 @@
+--- /home/gpfs/o_diener/code/k2/scripts/download_genomic_library.sh	2025-11-17 14:42:43.476888231 +0100
++++ /home/gpfs/o_diener/miniforge3/envs/medi/share/kraken2-2.1.3-4/libexec/download_genomic_library.sh	2025-04-09 12:42:41.740766021 +0200
+@@ -68,7 +68,7 @@
+     else
+       awk '{ print $NF }' .listing | perl -ple 'tr/\r//d' | grep '\.fna\.gz' > manifest.txt
+     fi
+-    cat manifest.txt | xargs -n1 -I{} wget -q $FTP_SERVER/genomes/refseq/plasmid/{}
++    cat manifest.txt | xargs -n1 -I{} wget -q https://$NCBI_SERVER/genomes/refseq/plasmid/{}
+     cat manifest.txt | xargs -n1 -I{} gunzip -c {} > $library_file
+     rm -f plasmid.* .listing
+     scan_fasta_file.pl $library_file > prelim_map.txt

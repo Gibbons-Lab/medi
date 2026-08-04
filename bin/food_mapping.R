@@ -59,7 +59,7 @@ energy <- function(ab) {
     )
 }
 
-food <- fread(file.path(args[1], "Food.csv"))
+food <- fread(args[3])
 content <- fread(file.path(args[1], "Content.csv"))
 compounds <- fread(file.path(args[1], "Compound.csv"))
 nutrients <- fread(file.path(args[1], "Nutrient.csv"))
@@ -67,9 +67,9 @@ matched <- unique(fread(args[2])[,
     .(orig_taxid, db, rank, matched_taxid, kingdom, phylum,
       class, order, family, genus, species)])
 
-food <- food[!is.na(ncbi_taxonomy_id),
+food <- food[!is.na(revised_taxonomy_id),
     .(food_id = id, wikipedia_id, food_group, food_subgroup,
-      ncbi_taxonomy_id)]
+      revised_taxonomy_id)]
 content <- content[!is.na(standard_content), .(
     compound_id = source_id, food_id, orig_content, orig_min, orig_max,
     orig_unit, standard_content, preparation_type, source_type
@@ -105,7 +105,7 @@ nutrients <- rbind(
 )
 compounds <- rbind(compounds, nutrients, use.names = TRUE, fill = TRUE)
 food_matches <- food[
-    matched, on = c(ncbi_taxonomy_id = "orig_taxid"), nomatch = 0]
+    matched, on = c(revised_taxonomy_id = "orig_taxid"), nomatch = 0]
 fwrite(food_matches, "food_matches.csv")
 food_matches <- content[food_matches, on = "food_id", nomatch = 0]
 food_matches <- compounds[

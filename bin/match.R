@@ -10,7 +10,8 @@ library(reutils)
 
 ASSEMBLY_SEARCH <- "txid%s[orgn]"
 NT_SEARCH <- "txid%s[orgn] AND 10000:10000000000[SLEN] AND biomol_genomic[PROP]"
-GB_SCORES <- c(Contig = 0, Chromosome = 1, Scaffold = 1, `Complete Genome` = 2)
+GB_CATEGORY_SCORES <- c(`na` = 0, `representative genome` = 10, `reference genome` = 20)
+GB_ASSEMBLY_SCORES <- c(Contig = 0, Chromosome = 1, Scaffold = 1, `Complete Genome` = 2)
 
 
 if (is.null(getOption("reutils.api.key"))) {
@@ -20,11 +21,10 @@ if (is.null(getOption("reutils.api.key"))) {
 }
 
 genbank_quality <- function(dt) {
-    dt <- copy(dt)[order(-seq_rel_date)]
+    dt <- dt[order(-seq_rel_date)]
     dt[, "score" := 0]
-    dt["reference genome" %in% refseq_category, score := score + 20]
-    dt["representative genome" %in% refseq_category, score := score + 10]
-    dt[, score := score + GB_SCORES[assembly_level]]
+    dt[, score := score + GB_CATEGORY_SCORES[refseq_category] + GB_ASSEMBLY_SCORES[assembly_level]]
+    dt[is.na(score), "score" := 0]
 
     return(dt)
 }
@@ -37,7 +37,7 @@ not_found <- function(res) {
 }
 
 find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
-    url <- NULL
+    url <- NA
     taxid <- as.character(taxid)[!is.na(taxid)]
     if (db == "genbank") {
         flog.info("Querying the assembly database for taxon %s...", taxid)
@@ -45,15 +45,25 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
         if (all(is.na(tids))) {
             return(NULL)
         }
-        matches <- gb_summary[tids] %>% genbank_quality()
+        matches <- gb_summary[tids]
         # If we have a complete genome we use the most recent one
         if (matches[, max(score)] > 1) {
             matches <- matches[score == max(score)][1]
         } else {
             matches <- matches[score == max(score)]
         }
+
         uids <- matches[, `#assembly_accession`]
+        if (length(uids) == 0) {
+            return(NULL)
+        }
+
         url <- matches[, ftp_path]
+        refseq_category <- matches[, refseq_category]
+        assembly_level <- matches[, assembly_level]
+        seqlength <- matches$genome_size
+        genome_type <- "full genome"
+        name <- paste(matches$organism_name, matches$infraspecific_name)
     } else {
         r <- rate
         for (i in 0:7) {
@@ -66,21 +76,69 @@ find_taxon <- function(taxid, gb_taxa, gb_summary, col, db) {
                 sort = "SLEN",
                 db = "nuccore"
             ))
+            Sys.sleep(1/rate)
             if (ret$no_errors() || not_found(ret)) {
                 break
             }
-            if (i == 7) {
-                flog.info("Querying failed for %s. Aborting.", taxid)
-                stop()
-            }
         }
+
+        if ((i == 7) && !ret$no_errors()) {
+            flog.info("Querying failed for %s. Aborting.", taxid)
+            stop()
+        }
+
         uids <- ret %>% uid()
         uids <- uids[!is.na(uids)]
+
+        if (length(uids) > 0) {
+            for (i in 0:7) {
+                Sys.sleep(1 / rate + 2^i)
+                summ <- suppressMessages(esummary(ret, db="nuccore"))
+                if (summ$no_errors()) {
+                    s <- summ %>% content("parsed")
+                    if ("tbl_df" %in% class(s)) {
+                        setDT(s)
+                    } else {
+                        s <- rbindlist(s, fill=TRUE)
+                    }
+                    break
+                }
+            }
+        } else {
+            return(NULL)
+        }
+
+        refseq_category <- "excluded"
+        assembly_level <- "contig"
+        if ("Slen" %in% names(s)) {
+            seqlength <- as.integer(s$Slen)
+        } else {
+            seqlength <- 0
+        }
+        if ("Genome" %in% names(s)) {
+            genome_type <- s$Genome
+        } else {
+            genome_type <- "na"
+        }
+        if ("Title" %in% names(s)) {
+            name <- s$Title
+        } else {
+            name <- "na"
+        }
     }
-    if (length(uids) == 0) {
-        return(NULL)
-    }
-    return(data.table(id = uids, db = db, matched_taxid = taxid, url = url))
+
+    result <- data.table(
+        id = uids, db = db, matched_taxid = taxid, url = url,
+        refseq_category = refseq_category, assembly_level = assembly_level,
+        seqlength=seqlength, name = name, genome_type = genome_type
+    )
+    result <- result[order(-seqlength)] %>%
+        unique(by=c("db", "matched_taxid", "assembly_level", "name", "genome_type"))
+
+    flog.info("Found %d unique records for %s with a total size of %g MBps.",
+        nrow(result), taxid, sum(seqlength) / 1e6, ncol(result))
+
+    return(result)
 }
 
 ordered_match <- function(
@@ -121,6 +179,7 @@ gbs <- fread(args[2], sep = "\t")
 # Only keep the ones actually available.
 gbs <- gbs[grepl("ftp.ncbi.nlm.nih.gov", ftp_path, fixed = TRUE)]
 gbs[, "taxid" := as.character(taxid)]
+gbs <- genbank_quality(gbs)
 setkey(gbs, taxid)
 taxids[, (RANKS) := tstrsplit(names, ";")]
 taxids[, (paste0(RANKS, "_taxid")) := tstrsplit(taxids, ";")]
@@ -143,6 +202,7 @@ for (i in 1:nrow(trials)) {
     queries <- food[!orig_taxid %in% matches$orig_taxid]
     m <- ordered_match(queries, gb_taxa, gbs, db = db, rank = rank)
     matches <- rbind(matches, m, fill = TRUE, use.names = TRUE)
+    gbs[`#assembly_accession` %chin% matches$id, score := score - 30]
 }
 matches <- unique(food[, c("orig_taxid", RANKS), with = FALSE])[
     matches,
