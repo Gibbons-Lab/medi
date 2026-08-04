@@ -21,6 +21,34 @@ It contains capabilities for the following individual functionalities:
 > MEDI is built and tested on Linux only which should be the most common configuration
 > due to the large resource requirements (500GB RAM).
 
+### Install Nextflow
+
+MEDI is nothing else than a set of Nextflow pipelines. You can install Nextflow by following
+any of [the official installation instructions](https://docs.seqera.io/nextflow/install). In
+case you want to set up the MEDI conda environment anyway you can also jump directly to the
+last step because the MEDI conda environment comes with nextflow.
+
+If you want to use Docker, Apptainer or Singularity we do recommend to install Nextflow
+first.
+
+### Docker and other container engines
+
+We do provide a Docker image with a working MEDI installation. If you have Nextflow installed
+no additional installation steps are necessary. Simply call the pipeline with the
+`-with-docker` argument. For instance:
+
+```bash
+nextflow run $MEDI/quant.nf --db=/my/medi_db -with-docker cdiener/medi
+```
+
+To use Apptainer or Singularity simply substitute this with `-with-singularity` or `-with-apptainer`.
+Nextflow will automatically download and covert the image.
+
+### Conda
+
+> [!WARNING]
+> This is the most flexible but also most involved installation.
+
 You will need a working miniforge or miniconda to start. YOu can follow the [installation
 instructions here](https://github.com/conda-forge/miniforge?tab=readme-ov-file#install). After
 create an environment with the included conda environment file.
@@ -32,6 +60,8 @@ git clone https://github.com/gibbons-lab/medi
 cd medi
 ```
 
+Create the conda environment.
+
 ```bash
 conda env create -n medi -f medi.yml
 ```
@@ -42,32 +72,32 @@ After that activate the environment.
 conda activate medi
 ```
 
-### Compile the report generator
+#### Compile the report generator and apply patches
 
-> [!TIP]
-> This will only be necessary if the provided binary does not work.
-> You can test this by running `./bin/kraken2-report` if this returns
-> "malformed taxonomy file" you are good. If you get errors about the
-> ELF class or a missing libc version you will need to recompile.
+MEDI requires some manual adjustments for Kraken2, in particular:
 
-Kraken2 does not support generating reports on filtered output files by default.
-We provide a pre-compiled report generator from a [Kraken2 fork](https://github.com/daydream-boost/kraken2).
-If this does not work you can compile it using the provided Makefile:
+1. A custom report generator to process the filtered classifications from architeuthis.
+2. Fixes to Kraken2 to correctly download the decoys and support symlinks during build.
+
+All of this is bundled into a Make file. So those steps can be run by activating the MEDI
+environment (should aready have done this in the previous step) and running:
 
 ```bash
-conda activate medi
-make report
+make .
 ```
 
-This will compile the report generator for your platform and replace the binary.
+After that MEDI can be run locally by calling the commands below. If you run on a computing
+cluster you may have to pass in the conda environment, for instance:
+
+```bash
+nextflow run $MEDI/quant.nf --db=/my/medi_db -with-conda $CONDA_PREFIX/envs/medi
+```
 
 ---
 
 And you are done. If you are running this on a HPC cluster or a cloud provider, you
 moght need to [adjust your nextflow settings](https://www.nextflow.io/docs/latest/config.html#config-scopes) for your setup.
 
-All pipelines support a `--threads` parameter that defines the maximum number of threads
-to use for any single process.
 
 ## Calling MEDI steps
 
@@ -97,13 +127,17 @@ nextflow run $MEDI/quant.nf --db=/my/medi_db
 
 Both will work the same.
 
-# MEDI steps
+# Building the database
 
-Here are the full steps to build the database and run it on your data.
+Here are the full steps to build the database.
 
 > [!NOTE]
+> You can request personalized download access to the database by sending an E-mail to
+> mail◎dienerlab.com that contains a Gmail address from you. I will then share the database
+> with you and provide you instructions to download with rclone.
+>
 > If you are asking yourself why we don't just provide the built database for download
-> please [see the comments here](docs/db_download.md).
+> in a public repository please [see the comments here](docs/db_download.md).
 
 ## (1-2) Matching and downloading
 
@@ -125,25 +159,18 @@ Please also the the [troubleshooting guide](docs/db_download.md) in case you enc
 After running the previous step continue with
 
 ```bash
-nextflow run build_kraken.nf --max_db_size=500
+nextflow run build_kraken.nf --max_db_size=600
 ```
 
-Here `--max_db_size` denotes the maximum size of the database in GB. The default
-will use no reduction but you can set this to a lower level which will create a
-smaller but less accurate hash. Note that for good performance you will need as much
-RAM as what you choose here.
-
-Note that this step of the pipeline will not work with the `-resume` option. The `add_*` need
-to finish completely or the pipeline needs to be restarted from the beginning. Should this
-work and the later steps crash, you can trigger just the hash building using the
-`--rebuild` option which will rebuild the database but not attempt to add sequences again.
+Here `--max_db_size` denotes the maximum size of the database in GB. Unfortunately it is not
+possible to know this number *a priori*, but this default should be close to what is currently needed.
 
 > [!WARNING]
 > Do not run this step with the `-resume` Nextflow option as this will result in a
 > corrupted database. In case, all adding sequences worked and you only want to run the
 > build step again, use the `--rebuild=true` option.
 
-## (4) Quantification for MGS samples
+# Quantification for metagenomic sequencing samples
 
 For your own sequencing data create a directory and use either of the setups described above.
 
@@ -189,6 +216,7 @@ the taxonomic rank (S - species, G - genus, D - domain).
 
 ## TODO
 
-- [] see if we can provide a reduced DB for download
 - [x] make execution more flexible
 - [x] add resource limits for individual steps for HPC clusters
+- [ ] switch decoy downloads to NCBI datasets CLI
+- [ ] switch Kraken2 to KunPeng
